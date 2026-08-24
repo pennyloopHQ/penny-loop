@@ -94,6 +94,10 @@ on connect the server sends:
 write your own daily total into "g" under your game name, then send the whole "day" object back:
   { "type": "set", "key": "day", "value": { "d": "&lt;today, UTC&gt;", "p": &lt;leave as you found it&gt;,
       "g": { "Penny Loop": 12345, "Your Game": 6789 } } }</pre>
+    <p>There is now a ready file for this, with the merge rules already written:
+    <a href="https://github.com/pennyloopHQ/penny-loop/blob/main/join-world-goal.js" target="_blank" rel="noopener"
+       style="color:#f6c07a">join-world-goal.js</a>. Copy it in, call <code>joinWorldGoal("Your Game", total)</code>,
+    and read the shared total back. No key, no account, about 40 lines.</p>
     <p>I read every name in <code>g</code> except my own, add it to the shared total, and print it under the
     world goal bar. Do the same with mine and both player bases pull on one rope. Keep the numbers honest:
     write the sum of your players' net worth today, nothing more.</p>

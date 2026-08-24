@@ -30,18 +30,18 @@ main{flex:1 1 auto;display:grid;grid-template-columns:1fr 300px;gap:10px;min-hei
   display:flex;justify-content:space-between;align-items:center}
 .card h2 span.t{color:var(--gold);font-weight:700;letter-spacing:.02em;text-transform:none;font-size:13px}
 
-/* track */
-#track{flex:1 1 auto;display:flex;flex-direction:column;gap:7px;justify-content:stretch}
-.lane{position:relative;flex:1 1 0;min-height:30px;max-height:58px;height:34px;border-radius:9px;background:#120d07;border:1px solid #251a0d;overflow:hidden}
-.lane .fin{position:absolute;right:8px;top:0;bottom:0;width:3px;background:repeating-linear-gradient(
-  180deg,#fff 0 5px,#000 5px 10px);opacity:.5}
-.lane .h{position:absolute;top:50%;transform:translate(-50%,-50%);font-size:22px;transition:left .18s linear;
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
-.lane .nm{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--dim);
-  pointer-events:none;width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.lane.win{border-color:var(--gold2);background:#1d1408}
-.lane .od{position:absolute;right:20px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--gold3);
-  font-variant-numeric:tabular-nums}
+/* the course, seen from above, like the original */
+#course{flex:1 1 auto;display:flex;flex-direction:column;gap:8px;min-height:0}
+/* The canvas is out of the layout flow, so its bitmap size can never push the box around. */
+#cvwrap{position:relative;flex:1 1 auto;min-height:80px}
+#cv{position:absolute;inset:0;width:100%;height:100%;border-radius:10px;background:#0d3b12;display:block}
+#runners{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:5px}
+.rc{display:flex;align-items:center;gap:5px;background:#120d07;border:1px solid #251a0d;border-radius:8px;
+  padding:4px 7px;font-size:11.5px}
+.rc b{font-variant-numeric:tabular-nums;color:var(--gold3)}
+.rc .dot{width:9px;height:9px;border-radius:50%}
+.rc.lead{border-color:var(--gold2)}
+.rc em{font-style:normal;color:var(--dim)}
 
 /* bet row */
 .bets{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
@@ -92,9 +92,7 @@ footer a{color:var(--gold)}
   header .sub:last-child{margin-left:auto}
   main{grid-template-columns:1fr;grid-template-rows:auto auto;min-height:0}
   .card{padding:10px}
-  #track{flex:0 0 auto;gap:5px}
-  .lane{flex:0 0 auto;height:32px;max-height:32px}
-  .lane .nm{width:64px;font-size:11px}
+  #cvwrap{flex:0 0 auto;height:210px}
   .bets{gap:5px}
   .bets button{flex:1 1 30%;min-width:0;font-size:11.5px;padding:7px 3px}
   #chat{height:150px;flex:0 0 auto}
@@ -115,7 +113,7 @@ footer a{color:var(--gold)}
   <main>
     <div class="card">
       <h2><span>Race <span id="rid">—</span></span><span class="t" id="clock"></span></h2>
-      <div id="track"></div>
+      <div id="course"><div id="cvwrap"><canvas id="cv"></canvas></div><div id="runners"></div></div>
       <div class="bets" id="bets"></div>
       <div class="row">
         <span class="sub">bet</span>
@@ -182,32 +180,129 @@ const oddsCache = {};
 const oddsFor = rid => (oddsCache[rid] = oddsCache[rid] || buildRace(rid, "form").odds);
 const raceStart = rid => rid * RACE_MS;
 
-/* Each horse gets 24 segment speeds. Positions are a running sum, so the whole race is
-   one pure function of the seed. The seed is the race id plus a salt the room agrees on. */
-function buildRace(rid, salt){
-  const rnd = mulberry(hash(rid + ":" + (salt || "")));
-  const hs = [];
-  for(let i = 0; i < HORSES; i++){
-    const base = 0.82 + rnd() * 0.36;
-    const seg = [];
-    for(let k = 0; k < 24; k++) seg.push(base * (0.7 + rnd() * 0.6));
-    const total = seg.reduce((a,b) => a+b, 0);
-    hs.push({ i, seg, total });
+/* ---------- the course, and horses that run it ----------
+   The original Horse Race Tests is a top down course: horses wander a winding track, take wrong
+   turns, and the first one to the carrots wins. So this is a course, not six straight lanes.
+   Everything below is a pure function of the race id and the salt, so every screen shows the same
+   race, and nobody can compute the winner before the room agrees the salt at the gate. */
+const GW = 26, GH = 15, STEP = 50;                        /* grid, and the physics tick in ms */
+const COLS = ["#f6b45a","#7ddc8a","#7ab8ff","#c9a0ff","#ff9d5c","#f0eee6"];
+
+/* A winding corridor from the left edge to the carrots, widened into blobs, with dead ends. */
+function courseFor(rid){
+  const rnd = mulberry(hash("course" + rid));
+  const open = new Uint8Array(GW * GH);
+  const at = (x,y) => x >= 0 && x < GW && y >= 0 && y < GH ? open[y*GW+x] : 0;
+  const blob = (x,y,r) => {
+    for(let dy = -r; dy <= r; dy++) for(let dx = -r; dx <= r; dx++)
+      if(dx*dx + dy*dy <= r*r + 1){
+        const nx = x+dx, ny = y+dy;
+        if(nx > 0 && nx < GW-1 && ny > 0 && ny < GH-1) open[ny*GW+nx] = 1;
+      }
+  };
+  let x = 2, y = Math.floor(GH/2);
+  blob(x, y, 1);
+  const branches = [];
+  while(x < GW - 3){
+    const turn = rnd();
+    if(turn < 0.5){ y += rnd() < 0.5 ? -2 : 2; y = clamp(y, 3, GH-4); }
+    else x += 1;
+    blob(x, y, rnd() < 0.15 ? 2 : 1);
+    if(rnd() < 0.3) branches.push([x, y]);
   }
-  const best = Math.max(...hs.map(h => h.total));
-  hs.forEach(h => { h.k = h.total / best; });                     // 1 = wins by a nose
-  const order = [...hs].sort((a,b) => b.total - a.total).map(h => h.i);
-  const odds = hs.map(h => Math.round((1.6 + (1 - h.k) * 26) * 10) / 10);
-  return { rid, salt: salt || "", hs, order, odds, winner: order[0] };
+  blob(GW-3, y, 1);
+  for(const [bx, by] of branches){                        /* dead ends, so a horse can go wrong */
+    let cx = bx, cy = by;
+    const len = 2 + Math.floor(rnd() * 3);
+    for(let k = 0; k < len; k++){
+      cx += rnd() < 0.5 ? 1 : -1; cy += rnd() < 0.5 ? -1 : 1;
+      blob(clamp(cx,2,GW-3), clamp(cy,2,GH-3), 1);
+    }
+  }
+  const goal = { x: GW-3, y };
+  /* how many steps from every cell to the carrots, so a horse can be clever or stupid */
+  const dist = new Int32Array(GW*GH).fill(-1);
+  const q = [goal.y*GW + goal.x]; dist[q[0]] = 0;
+  for(let h = 0; h < q.length; h++){
+    const c = q[h], cx = c % GW, cy = (c - cx) / GW;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = cx+dx, ny = cy+dy;
+      if(!at(nx,ny)) continue;
+      const n = ny*GW + nx;
+      if(dist[n] < 0){ dist[n] = dist[c] + 1; q.push(n); }
+    }
+  }
+  return { rid, open, dist, goal, at };
 }
-/* distance covered, 0 to 1, for horse h at t ms into the run */
+const courseCache = {};
+const getCourse = rid => (courseCache[rid] = courseCache[rid] || courseFor(rid));
+
+/* Run the whole race once, at the gate, and keep every position. The replay is then exact. */
+function buildRace(rid, salt){
+  const c = getCourse(rid);
+  const rnd = mulberry(hash(rid + ":" + (salt || "")));
+  const steps = Math.floor(RUN_MS / STEP);
+  const hs = [];
+  for(let i = 0; i < HORSES; i++) hs.push({
+    i,
+    x: 2 + (i % 2) * 0.4, y: c.goal.y - 1.2 + (i * 0.45) % 2.4,   /* they start together, on the left */
+    speed: 0.032 + rnd() * 0.022,                                   /* cells per tick */
+    smart: 0.34 + rnd() * 0.6,                                     /* chance of taking the right turn */
+    dir: [1, 0], path: new Float32Array(steps * 2), done: -1,
+  });
+  const dAt = (x,y) => { const gx = Math.round(x), gy = Math.round(y);
+    return c.at(gx,gy) ? c.dist[gy*GW+gx] : 9999; };
+  let finished = [];
+  for(let t = 0; t < steps; t++){
+    for(const h of hs){
+      if(h.done < 0){
+        /* pick a direction at every cell centre: down the gradient if clever, else anywhere open */
+        const gx = Math.round(h.x), gy = Math.round(h.y);
+        const opts = [[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy]) => c.at(gx+dx, gy+dy));
+        if(opts.length){
+          const best = opts.reduce((a,b) =>
+            c.dist[(gy+b[1])*GW + gx+b[0]] < c.dist[(gy+a[1])*GW + gx+a[0]] ? b : a);
+          const keep = opts.find(([dx,dy]) => dx === h.dir[0] && dy === h.dir[1]);
+          const r = rnd();
+          h.dir = r < h.smart ? best
+                : keep && r < h.smart + 0.25 ? keep
+                : opts[Math.floor(rnd() * opts.length)];
+        }
+        h.x += h.dir[0] * h.speed; h.y += h.dir[1] * h.speed;
+        if(!c.at(Math.round(h.x), Math.round(h.y))){        /* ran into grass: step back and turn */
+          h.x -= h.dir[0] * h.speed; h.y -= h.dir[1] * h.speed; h.dir = [-h.dir[0], -h.dir[1]];
+        }
+        if(Math.abs(h.x - c.goal.x) < 0.8 && Math.abs(h.y - c.goal.y) < 0.8){
+          h.done = t; finished.push(h.i);
+        }
+      }
+      h.path[t*2] = h.x; h.path[t*2+1] = h.y;
+    }
+  }
+  /* first to the carrots wins. If nobody gets there, the closest one does. */
+  let winner = finished[0];
+  if(winner === undefined){
+    winner = hs.map(h => [h.i, dAt(h.x, h.y)]).sort((a,b) => a[1] - b[1])[0][0];
+  }
+  const order = [...hs].sort((a,b) =>
+    (a.done < 0 ? 1e6 + dAt(a.x,a.y) : a.done) - (b.done < 0 ? 1e6 + dAt(b.x,b.y) : b.done)).map(h => h.i);
+  /* the odds are published from the "form" seed before the gate, so they never move */
+  const odds = hs.map(h => Math.round((1.6 + (1 - h.smart) * 12 + (0.085 - h.speed) * 90) * 10) / 10)
+                 .map(o => clamp(Math.round(o * 10) / 10, 1.4, 18));
+  return { rid, salt: salt || "", c, hs, steps, order, odds, winner, finished };
+}
+/* where a horse is at t ms into the run, in grid coordinates */
 function posOf(race, h, t){
-  const f = clamp(t / RUN_MS, 0, 1) * h.k;                        // the winner reaches 1 at the line
-  const x = f * 24;
-  let d = 0, i = 0;
-  for(; i < Math.floor(x) && i < 24; i++) d += h.seg[i];
-  if(i < 24) d += h.seg[i] * (x - Math.floor(x));
-  return clamp(d / h.total, 0, 1);
+  const f = clamp(t / RUN_MS, 0, 1) * (race.steps - 1);
+  const i = Math.floor(f), j = Math.min(race.steps - 1, i + 1), a = f - i;
+  return [h.path[i*2] + (h.path[j*2] - h.path[i*2]) * a,
+          h.path[i*2+1] + (h.path[j*2+1] - h.path[i*2+1]) * a];
+}
+/* how far a horse still has to go, 0 is the carrots */
+function leftOf(race, h, t){
+  const [x,y] = posOf(race, h, t), gx = Math.round(x), gy = Math.round(y);
+  const d = race.c.at(gx,gy) ? race.c.dist[gy*GW+gx] : 999;
+  return d < 0 ? 999 : d;
 }
 
 /* ---------- the shared room: chat, the salt, the horse names, the head count ---------- */
@@ -335,12 +430,66 @@ function maybeSendSalt(rid, phase){
 /* ---------- render ---------- */
 let curRid = -1, race = null, betH = -1, betAmt = 25, paid = -1;
 const AMTS = [10, 25, 100, "all"];
-const track = $("#track"), lanes = [];
-for(let i = 0; i < HORSES; i++){
-  const l = document.createElement("div"); l.className = "lane";
-  l.innerHTML = `<span class="nm"></span><span class="od"></span><span class="fin"></span><span class="h">${EMO[i]}</span>`;
-  track.appendChild(l);
-  lanes.push({ root: l, h: l.querySelector(".h"), nm: l.querySelector(".nm"), od: l.querySelector(".od") });
+const cv = $("#cv"), ctx = cv.getContext("2d");
+const TILE = 22;                                   /* the course is drawn once at this size */
+let CELL = 20, offX = 0, offY = 0, lastBox = "", lastMeasure = 0;
+function sizeCanvas(){
+  const w = Math.max(200, cv.clientWidth), h = Math.max(120, cv.clientHeight);
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = Math.floor(w * dpr); cv.height = Math.floor(h * dpr);
+  CELL = Math.min(cv.width / GW, cv.height / GH);
+  offX = (cv.width - CELL * GW) / 2; offY = (cv.height - CELL * GH) / 2;
+}
+/* One picture per race at a fixed size. Every frame just scales it, which is cheap. */
+let courseBmp = null, courseRid = -1;
+function drawCourse(){
+  if(!race) return;
+  const c = document.createElement("canvas"); c.width = GW * TILE; c.height = GH * TILE;
+  const g = c.getContext("2d");
+  g.fillStyle = "#0f7a1e"; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = "#12a02a";
+  for(let y = 0; y < GH; y++) for(let x = 0; x < GW; x++)
+    if((x + y) % 2 === 0) g.fillRect(x*TILE, y*TILE, TILE, TILE);
+  g.fillStyle = "#d8b57a";
+  for(let y = 0; y < GH; y++) for(let x = 0; x < GW; x++) if(race.c.open[y*GW+x]){
+    g.beginPath(); g.arc((x+0.5)*TILE, (y+0.5)*TILE, TILE*0.8, 0, 7); g.fill();
+  }
+  g.font = Math.round(TILE*1.6) + "px serif"; g.textAlign = "center"; g.textBaseline = "middle";
+  g.fillText("\u{1F955}", (race.c.goal.x+0.5)*TILE, (race.c.goal.y+0.5)*TILE);
+  courseBmp = c; courseRid = race.rid;
+}
+function drawRace(t){
+  if(!race) return;
+  const now = Date.now();
+  if(now - lastMeasure > 1000){                    /* measure at most once a second */
+    lastMeasure = now;
+    const box = cv.clientWidth + "x" + cv.clientHeight;
+    if(box !== lastBox){ lastBox = box; sizeCanvas(); }
+  }
+  if(!courseBmp || courseRid !== race.rid) drawCourse();
+  ctx.drawImage(courseBmp, offX, offY, CELL * GW, CELL * GH);
+  const done = phaseOf().phase === "done";
+  for(const h of race.hs){
+    const [x, y] = posOf(race, h, t);
+    const px = offX + (x+0.5)*CELL, py = offY + (y+0.5)*CELL;
+    ctx.beginPath(); ctx.arc(px, py, CELL*0.44, 0, 7);
+    ctx.fillStyle = COLS[h.i]; ctx.fill();
+    if(done && h.i === race.winner){
+      ctx.lineWidth = Math.max(2, CELL*0.14); ctx.strokeStyle = "#fff"; ctx.stroke();
+    }
+    ctx.font = Math.round(CELL*0.7) + "px serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(EMO[h.i], px, py + CELL*0.04);
+  }
+}
+/* the runner list under the course: colour, name, odds, and the live order */
+function paintRunners(t){
+  if(!race) { $("#runners").innerHTML = ""; return; }
+  const rank = race.hs.map(h => [h.i, leftOf(race, h, t)]).sort((a,b) => a[1] - b[1]);
+  const place = {}; rank.forEach(([i], k) => place[i] = k + 1);
+  $("#runners").innerHTML = race.hs.map(h =>
+    `<span class="rc ${place[h.i] === 1 ? "lead" : ""}"><span class="dot" style="background:${COLS[h.i]}"></span>
+      ${EMO[h.i]} ${horseName(h.i)} <em>${place[h.i]}${["st","nd","rd"][place[h.i]-1] || "th"}</em>
+      <b>${oddsFor(race.rid)[h.i].toFixed(1)}x</b></span>`).join("");
 }
 function paintBets(){
   const dis = phaseOf().phase !== "bet" || !!S.bet;
@@ -364,10 +513,6 @@ function paint(){
   $("#live").className = "live" + (live ? "" : " off");
   $("#rid").textContent = race ? "#" + (race.rid % 100000) : "—";
   $("#watching").textContent = heads > 1 ? heads + " watching" : "";
-  for(let i = 0; i < HORSES; i++){
-    lanes[i].nm.textContent = horseName(i);
-    lanes[i].od.textContent = race ? oddsFor(race.rid)[i].toFixed(1) + "x" : "";
-  }
   paintBets();
 }
 function paintChat(){
@@ -392,30 +537,23 @@ function frame(){
   if(p.rid !== curRid){                                   /* a new race */
     curRid = p.rid; race = null; betH = -1;
     if(S.bet && S.bet.rid !== p.rid) S.bet = null;
-    for(const l of lanes){ l.root.classList.remove("win"); l.h.style.left = START + "px"; }
     paint();
   }
   maybeSendSalt(p.rid, p.phase);
   const salt = saltFor(p.rid);
   if(p.phase === "bet"){
     if(!race) { race = buildRace(p.rid, "form"); paint(); }
+    drawRace(0); paintRunners(0);
     $("#phase").innerHTML = `betting open · <b>${Math.ceil(p.left/1000)}s</b> to the gate`;
-    if(p.left > 21000) $("#call").textContent = "Six runners. The three agents of the show ride the first three.";
+    if(p.left > 21000) $("#call").textContent = "A new course. Six runners. First to the carrots wins.";
   } else if(p.phase === "run"){
     if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
     $("#phase").innerHTML = `and they are off · <b>${Math.ceil(p.left/1000)}s</b> left`;
     callRace(race, p.t);
-    for(let i = 0; i < HORSES; i++){
-      const w = lanes[i].root.clientWidth - START - 34;
-      lanes[i].h.style.left = (START + posOf(race, race.hs[i], p.t) * w) + "px";
-    }
+    drawRace(p.t); paintRunners(p.t);
   } else {
     if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
-    for(let i = 0; i < HORSES; i++){
-      const w = lanes[i].root.clientWidth - START - 34;
-      lanes[i].h.style.left = (START + posOf(race, race.hs[i], RUN_MS) * w) + "px";
-    }
-    lanes[race.winner].root.classList.add("win");
+    drawRace(RUN_MS); paintRunners(RUN_MS);
     $("#phase").innerHTML = `<b>${horseName(race.winner)}</b> wins · next race in ${Math.ceil(p.left/1000)}s`;
     $("#call").textContent = `${horseName(race.winner)} wins it by ${marginOf(race)}${AGENTS[race.winner] ? ", for " + AGENTS[race.winner] : ""}.`;
     settle(race);
@@ -438,22 +576,26 @@ let calledAt = 0, calledLead = -1;
 function callRace(r, t){
   const now = Date.now();
   if(now - calledAt < 4000) return;
-  const pos = r.hs.map((h,i) => [i, posOf(r, h, t)]).sort((a,b) => b[1] - a[1]);
-  const lead = pos[0][0], gap = pos[0][1] - pos[1][1];
+  const rank = r.hs.map(h => [h.i, leftOf(r, h, t)]).sort((a,b) => a[1] - b[1]);
+  const lead = rank[0][0], gap = rank[1][1] - rank[0][1], back = rank[HORSES-1][0];
   let line;
-  if(t < 4000) line = `They are away. ${horseName(lead)} breaks first.`;
-  else if(lead !== calledLead) line = `${horseName(lead)} takes the lead from ${horseName(calledLead < 0 ? pos[1][0] : calledLead)}.`;
-  else if(gap > 0.12) line = `${horseName(lead)} is clear by ${Math.round(gap * 100)} lengths.`;
-  else if(gap < 0.02) line = `Nothing between ${horseName(lead)} and ${horseName(pos[1][0])}.`;
-  else if(pos[0][1] > 0.85) line = `${horseName(lead)} into the last furlong.`;
-  else line = `${horseName(lead)} leads, ${horseName(pos[1][0])} tracking.`;
+  if(t < 4000) line = `They are away. ${horseName(lead)} takes the first turn.`;
+  else if(lead !== calledLead) line = `${horseName(lead)} is in front now, past ${horseName(calledLead < 0 ? rank[1][0] : calledLead)}.`;
+  else if(rank[0][1] < 6) line = `${horseName(lead)} can see the carrots.`;
+  else if(gap === 0) line = `${horseName(lead)} and ${horseName(rank[1][0])} are level.`;
+  else if(gap > 8) line = `${horseName(lead)} is well clear. ${horseName(back)} is lost at the back.`;
+  else line = `${horseName(lead)} leads, ${horseName(rank[1][0])} tracking.`;
   calledAt = now; calledLead = lead;
   $("#call").textContent = line;
 }
-/* the winning margin, in lengths, read from the same maths that drew the race */
+/* the winning margin: how far the second horse still had to run when the winner reached the carrots */
 function marginOf(r){
-  const pos = r.hs.map(h => posOf(r, h, RUN_MS)).sort((a,b) => b - a);
-  const L = Math.max(1, Math.round((pos[0] - pos[1]) * 120));
+  const w = r.hs[r.winner];
+  if(w.done < 0) return "a nose";
+  const t = w.done * STEP;
+  const second = r.hs.map(h => [h.i, leftOf(r, h, t)]).filter(([i]) => i !== r.winner)
+                     .sort((a,b) => a[1] - b[1])[0];
+  const L = Math.max(1, Math.round(second[1] * 1.5));
   return L === 1 ? "a head" : L + " lengths";
 }
 function settle(r){
@@ -522,8 +664,9 @@ $("#share").onclick = async () => {
 };
 if(new URLSearchParams(location.search).get("r"))
   sysline("Somebody shared a race with you. The next one starts within 90 seconds.");
+sizeCanvas();
 sysline("Welcome. A race starts every 90 seconds and everybody sees the same one.");
-sysline("The first three horses are the three agents of the show: PENNY, MINT and KITE.");
+sysline("Six horses run one winding course. The first three are the agents of the show.");
 sysline("Bets close when the gate opens. The result is not decided until then.");
 paint();
 paintTally();

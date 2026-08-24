@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Penny Loop — compound one penny into an empire</title>
+<meta name="description" content="A tycoon game. Start with one penny. Buy ventures, hire managers, reinvest, and compound your way to an empire.">
+<meta property="og:title" content="Penny Loop">
+<meta property="og:description" content="Start with one penny. Compound it into an empire.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://pennyloop.games.bu.app/">
+<meta property="og:image" content="https://pennyloop.games.bu.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Penny Loop">
+<meta name="twitter:description" content="Start with one penny. Compound it into an empire.">
+<meta name="twitter:image" content="https://pennyloop.games.bu.app/og.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b0906">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Penny Loop">
+<link rel="apple-touch-icon" href="/icon-512.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23e2892a'/%3E%3Ctext x='32' y='45' font-size='40' font-family='Georgia' text-anchor='middle' fill='%238a4a0c'%3EP%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#0b0906; --panel:#17120c; --panel2:#1f1810; --line:#3a2a16;
+  --gold:#f6b45a; --gold2:#e2892a; --gold3:#ffd79a;
+  --text:#f2e6d4; --dim:#a68a66; --good:#7ddc8a; --bad:#e2705a;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:radial-gradient(120% 100% at 50% 0%,#241706 0%,var(--bg) 60%);
+  color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  overflow:hidden; user-select:none; -webkit-user-select:none;
+}
+#app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;position:relative}
+
+/* ---------- header ---------- */
+header{padding:calc(env(safe-area-inset-top) + 10px) 14px 8px;flex:0 0 auto}
+.brand{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.18em;color:var(--dim);text-transform:uppercase}
+.brand b{color:var(--gold3);letter-spacing:.24em}
+.cash{font-size:34px;font-weight:800;color:var(--gold3);line-height:1.1;margin-top:2px;
+  font-variant-numeric:tabular-nums;text-shadow:0 0 24px rgba(246,180,90,.25)}
+.rate{font-size:13px;color:var(--dim);font-variant-numeric:tabular-nums}
+.rate b{color:var(--gold)}
+.mood{margin-top:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:7px 10px;font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center}
+.mood b{color:var(--gold3)}
+
+/* ---------- tabs ---------- */
+nav{display:flex;gap:6px;padding:8px 14px 0;flex:0 0 auto}
+nav button{flex:1;background:transparent;border:none;color:var(--dim);font:inherit;font-size:13px;
+  font-weight:600;padding:9px 0 8px;border-bottom:2px solid transparent;cursor:pointer}
+nav button.on{color:var(--gold3);border-bottom-color:var(--gold2)}
+nav button .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--good);
+  margin-left:5px;vertical-align:middle;opacity:0}
+nav button .dot.show{opacity:1}
+
+/* ---------- scroll body ---------- */
+main{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;padding:10px 14px 90px;-webkit-overflow-scrolling:touch}
+main::-webkit-scrollbar{width:0}
+.page{display:none}
+.page.on{display:block}
+
+/* ---------- net worth graph ---------- */
+.nwg{margin:0 0 10px}
+.nwg svg{width:100%;height:46px;display:block;background:#1a1409;border-radius:8px;
+  border:1px solid var(--line)}
+.nwgl{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dim);margin-top:4px}
+
+/* ---------- vote banner ---------- */
+.vote{display:flex;align-items:center;gap:8px;margin-bottom:7px;padding:6px 9px;border-radius:9px;
+  background:linear-gradient(90deg,#123021,#101520);border:1px solid #2f6b49;font-size:11.5px}
+.vote b{color:#6fdca4}
+.vote p{flex:1;margin:0;color:#cfe6da;line-height:1.3}
+.vote a{color:#0e1a13;background:#5fd39a;text-decoration:none;font-weight:800;font-size:11.5px;
+  padding:4px 10px;border-radius:7px;flex:none}
+.vote button{background:none;border:0;color:#5c7a6b;font:inherit;font-size:16px;cursor:pointer;
+  padding:0 2px;flex:none}
+
+/* ---------- world goal ---------- */
+.wgoal{margin-bottom:7px;padding:7px 11px;border-radius:10px;background:var(--panel);
+  border:1px solid var(--line)}
+.wgoal .wt{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;
+  color:var(--dim);margin-bottom:5px;gap:8px}
+.wgoal .wt b{color:var(--gold3);font-size:12.5px;flex:none}
+.wbar{height:6px;border-radius:5px;background:#221a11;overflow:hidden}
+.wbar i{display:block;height:100%;border-radius:6px;
+  background:linear-gradient(90deg,#8a5a1c,var(--gold3));transition:width .4s ease}
+.wgoal .wn{margin:5px 0 0;font-size:10.5px;color:var(--dim);display:none}
+.wgoal.hit .wn{display:block;color:#63c797}
+.wgoal.hit{border-color:#2f6b49}
+.wgoal.hit .wbar i{background:linear-gradient(90deg,#2f6b49,#5fd39a)}
+
+/* ---------- goal strip ---------- */
+.goal{display:flex;align-items:center;gap:9px;margin-bottom:8px;padding:7px 11px;
+  background:linear-gradient(90deg,#2b1f10,var(--panel));border:1px solid #5d431c;
+  border-left:3px solid var(--gold3);border-radius:10px;font-size:12.5px}
+.goal .glab{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold3);
+  font-weight:800;flex:none;line-height:1.2}
+.goal .gtxt{flex:1;color:#e9dfd0;font-weight:600;line-height:1.25}
+.goal .grw{flex:none;color:var(--gold3);font-weight:800;font-variant-numeric:tabular-nums}
+.goal.done{border-left-color:#3f7a5c;background:linear-gradient(90deg,#13251c,var(--panel))}
+.goal.done .glab,.goal.done .grw{color:#63c797}
+
+.amts{display:flex;gap:6px;align-items:center;margin-bottom:9px;font-size:11.5px;color:var(--dim)}
+.amts span{letter-spacing:.14em;text-transform:uppercase;margin-right:2px}
+.amts button{background:var(--panel);border:1px solid var(--line);color:var(--dim);font:inherit;
+  font-size:12px;font-weight:700;border-radius:9px;padding:5px 11px;cursor:pointer}
+.amts button.on{background:#2f2110;border-color:#6a4a1e;color:var(--gold3)}
+
+/* ---------- venture card ---------- */
+.v{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+  border-radius:14px;padding:10px;margin-bottom:9px;position:relative;overflow:hidden}
+.v.locked{opacity:.45}
+.v .row{display:flex;align-items:center;gap:10px}
+.icon{width:46px;height:46px;flex:0 0 auto;border-radius:12px;display:grid;place-items:center;font-size:24px;
+  background:radial-gradient(circle at 35% 30%,#40301a,#221909);border:1px solid var(--line);cursor:pointer}
+.icon:active{transform:scale(.94)}
+.v .mid{flex:1 1 auto;min-width:0}
+.v .name{font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px}
+.v .name em{font-style:normal;font-size:11px;color:var(--gold);background:#2a1e0c;border:1px solid var(--line);
+  border-radius:6px;padding:1px 5px}
+.v .sub{font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;margin-top:1px}
+.bar{height:6px;background:#241a0e;border-radius:4px;margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold2),var(--gold3));
+  border-radius:4px;transition:width .08s linear}
+.buy{flex:0 0 auto;min-width:88px;background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;
+  border:none;border-radius:11px;padding:9px 8px;font:inherit;font-weight:800;font-size:13px;cursor:pointer;
+  font-variant-numeric:tabular-nums;line-height:1.15}
+.buy:disabled{background:#2a2115;color:#6b5941;cursor:default}
+.buy small{display:block;font-size:10px;font-weight:600;opacity:.75}
+.v .mgr{margin-top:8px;display:flex;gap:8px;align-items:center;border-top:1px dashed var(--line);padding-top:8px}
+.v .mgr span{flex:1;font-size:11.5px;color:var(--dim)}
+.v .mgr button{background:#2a1e0c;border:1px solid var(--line);color:var(--gold3);font:inherit;font-size:11.5px;
+  font-weight:700;border-radius:9px;padding:6px 9px;cursor:pointer}
+.v .mgr button:disabled{color:#6b5941;cursor:default}
+.v .mgr button.done{background:#1a2a18;border-color:#2f4a2b;color:var(--good)}
+
+/* ---------- generic card ---------- */
+.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+  border-radius:14px;padding:12px;margin-bottom:9px}
+.card h3{font-size:14px;margin-bottom:4px;color:var(--gold3)}
+.card p{font-size:12.5px;color:var(--dim);line-height:1.45}
+.card .act{margin-top:10px;display:flex;gap:8px}
+.btn{background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;border:none;border-radius:11px;
+  padding:10px 14px;font:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.btn.ghost{background:#2a1e0c;border:1px solid var(--line);color:var(--gold3)}
+.btn:disabled{background:#2a2115;color:#6b5941;cursor:default}
+.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:4px 0;color:var(--dim);
+  font-variant-numeric:tabular-nums}
+.kv b{color:var(--text)}
+
+/* ---------- achievements ---------- */
+.achs{margin-top:8px;display:flex;flex-direction:column;gap:1px}
+.ach{display:flex;gap:9px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #251a0d;opacity:.5}
+.ach:last-child{border-bottom:none}
+.ach.on{opacity:1}
+.ach .tick{width:16px;flex:0 0 auto;text-align:center;color:var(--dim);font-weight:800}
+.ach.on .tick{color:var(--good)}
+.ach b{display:block;font-size:12.5px;color:var(--text);font-weight:700}
+.ach.on b{color:var(--gold3)}
+.ach em{display:block;font-style:normal;font-size:11px;color:var(--dim);margin-top:1px}
+
+/* ---------- leaderboard ---------- */
+.lb{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #251a0d;font-size:13px}
+.lb:last-child{border-bottom:none}
+.lb .pos{width:26px;flex:0 0 auto;text-align:right;color:var(--dim);font-weight:700;
+  font-variant-numeric:tabular-nums}
+.lb .who{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb .who em{font-style:normal;font-size:10.5px;color:var(--gold);margin-left:5px}
+.lb .amt{flex:0 0 auto;color:var(--gold3);font-weight:700;font-variant-numeric:tabular-nums}
+.lb.me{background:#221808;margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:8px}
+.lb.me .pos,.lb.me .who{color:var(--gold3)}
+.lb .pos.p1{color:#ffd79a}
+.nameRow{display:flex;gap:8px;margin-top:10px}
+.nameRow input{flex:1;background:#120d07;border:1px solid var(--line);border-radius:11px;color:var(--text);
+  font:inherit;font-size:14px;padding:10px 12px;min-width:0}
+.nameRow input:focus{outline:none;border-color:var(--gold2)}
+.live{font-size:11px;color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+.live b{color:var(--good);font-weight:700}
+.live b.off{color:var(--bad)}
+
+/* ---------- footer ---------- */
+footer{position:absolute;left:0;right:0;bottom:0;padding:9px 14px calc(env(safe-area-inset-bottom) + 10px);
+  background:linear-gradient(180deg,rgba(11,9,6,0),rgba(11,9,6,.92) 30%);display:flex;gap:8px}
+footer .tap{flex:1;background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;border:none;
+  border-radius:14px;padding:14px 0;font:inherit;font-weight:800;font-size:16px;cursor:pointer}
+footer .tap:active{transform:translateY(1px)}
+
+/* ---------- coach ---------- */
+#coach{position:absolute;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 62px);
+  display:none;align-items:center;gap:9px;background:#241a0c;border:1px solid #5d431c;
+  border-radius:12px;padding:8px 10px;box-shadow:0 8px 22px rgba(0,0,0,.5);z-index:6}
+#coach b{color:var(--gold3);font-size:11px;letter-spacing:.08em;text-transform:uppercase;flex:0 0 auto}
+#coach p{margin:0;flex:1;font-size:12.5px;color:var(--text);line-height:1.35}
+#coach button{background:none;border:none;color:var(--dim);font:inherit;font-size:17px;
+  line-height:1;cursor:pointer;padding:0 2px}
+.pulse{position:relative;animation:pulse 1.25s ease-in-out infinite;
+  box-shadow:0 0 0 0 rgba(246,192,122,.75)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(246,192,122,.7)}
+  70%{box-shadow:0 0 0 11px rgba(246,192,122,0)}100%{box-shadow:0 0 0 0 rgba(246,192,122,0)}}
+
+/* ---------- lucky penny ---------- */
+#luck{position:absolute;width:52px;height:52px;border:none;padding:0;border-radius:50%;cursor:pointer;
+  background:radial-gradient(circle at 34% 30%,#fff2cf,#f0b45a 45%,#b4701d);
+  box-shadow:0 0 18px rgba(246,192,122,.75),inset 0 -3px 6px rgba(0,0,0,.25);
+  font:800 26px/52px ui-sans-serif,system-ui,sans-serif;color:#5d3a10;text-align:center;z-index:7;
+  animation:lspin 1.6s linear infinite}
+@keyframes lspin{0%{transform:scale(1) rotate(0)}50%{transform:scale(1.1) rotate(180deg)}
+  100%{transform:scale(1) rotate(360deg)}}
+
+/* ---------- fx ---------- */
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pop{position:absolute;font-weight:800;font-size:15px;color:var(--gold3);text-shadow:0 1px 6px #000;
+  animation:rise .8s ease-out forwards;font-variant-numeric:tabular-nums}
+@keyframes rise{from{transform:translate(-50%,0);opacity:1}to{transform:translate(-50%,-46px);opacity:0}}
+.spark{position:absolute;width:7px;height:7px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#ffe0a8,#e2892a);animation:fly .7s ease-out forwards}
+@keyframes fly{to{opacity:0}}
+
+/* ---------- modal ---------- */
+#modal{position:absolute;inset:0;background:rgba(6,4,2,.82);display:none;place-items:center;padding:20px;z-index:20}
+#modal.on{display:grid}
+#modal .box{background:linear-gradient(180deg,#20180f,#140f09);border:1px solid var(--line);border-radius:16px;
+  padding:18px;max-width:340px;width:100%;text-align:center}
+#modal h2{color:var(--gold3);font-size:20px;margin-bottom:8px}
+#modal p{font-size:13px;color:var(--dim);line-height:1.5}
+#modal .act{margin-top:14px;display:flex;flex-direction:column;gap:8px}
+.toast{position:absolute;left:50%;bottom:96px;transform:translateX(-50%);background:#20180f;
+  border:1px solid var(--line);color:var(--gold3);font-size:12.5px;font-weight:600;padding:9px 14px;
+  border-radius:11px;z-index:30;animation:toast 2.4s ease forwards;white-space:nowrap;max-width:92%}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,8px)}12%,80%{opacity:1;transform:translate(-50%,0)}100%{opacity:0}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand"><b>PENNY LOOP</b><span id="pstat"></span></div>
+    <div class="cash" id="cash">$0.01</div>
+    <div class="rate">auto <b id="rate">$0.00</b>/s &nbsp;·&nbsp; net worth <b id="nw">$0.01</b></div>
+    <div class="mood" id="mood"></div>
+  </header>
+  <nav>
+    <button data-p="ventures" class="on">Ventures<span class="dot" id="dv"></span></button>
+    <button data-p="upgrades">Upgrades<span class="dot" id="du"></span></button>
+    <button data-p="reinvest">Reinvest<span class="dot" id="dr"></span></button>
+    <button data-p="ranks">Ranks<span class="dot" id="dl"></span></button>
+  </nav>
+  <main>
+    <div class="page on" id="p-ventures">
+    <div class="vote" id="vote" style="display:none">
+      <b>Poll</b>
+      <p>Three agent games, one funding poll today. A vote keeps this one funded.</p>
+      <a id="voteLink" href="https://x.com/Alezander9/status/2091693365452841460" target="_blank" rel="noopener">Vote</a>
+      <button id="voteX" title="hide">&times;</button>
+    </div>
+    <div class="wgoal" id="wgoal">
+      <div class="wt"><span id="wwho">World goal today</span><b id="wnum">syncing</b></div>
+      <div class="wbar"><i id="wfill" style="width:0%"></i></div>
+      <p class="wn" id="wnote"></p>
+    </div>
+    <div class="goal" id="goal">
+      <span class="glab">Goal<br><b id="goalN"></b></span>
+      <span class="gtxt" id="goalTxt"></span>
+      <span class="grw" id="goalRw"></span>
+    </div>
+    <div class="amts">
+      <span>buy</span>
+      <button data-amt="1" class="on">×1</button>
+      <button data-amt="10">×10</button>
+      <button data-amt="0">max</button>
+    </div></div>
+    <div class="page" id="p-upgrades"></div>
+    <div class="page" id="p-reinvest"></div>
+    <div class="page" id="p-ranks"></div>
+  </main>
+  <div id="coach"><b>Step <span id="cn">1</span>/4</b><p id="ctxt"></p>
+    <button id="cx" title="hide">&times;</button></div>
+  <footer>
+    <button class="tap" id="tap">Work the counter</button>
+  </footer>
+  <div id="fx"></div>
+  <div id="modal"><div class="box" id="mbox"></div></div>
+</div>
+<script type="module">
+import {zzfx, ZZFX} from "https://cdn.jsdelivr.net/npm/zzfx@1.3.2/ZzFX.min.js";
+
+/* ============================ helpers ============================ */
+const $ = s => document.querySelector(s);
+const el = (t,c) => { const e = document.createElement(t); if(c) e.className = c; return e; };
+const SUF = ["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","Ud","Dd","Td"];
+function money(n){
+  if(!isFinite(n)) return "$∞";
+  if(n < 1000) return "$" + (n < 10 ? n.toFixed(2) : Math.round(n));
+  let i = 0; while(n >= 1000 && i < SUF.length-1){ n /= 1000; i++; }
+  return "$" + n.toFixed(n<10?2:n<100?1:0) + SUF[i];
+}
+function secs(s){
+  if(s < 1) return s.toFixed(1)+"s";
+  if(s < 60) return Math.ceil(s)+"s";
+  if(s < 3600) return Math.floor(s/60)+"m "+Math.floor(s%60)+"s";
+  return Math.floor(s/3600)+"h "+Math.floor(s%3600/60)+"m";
+}
+let muted = localStorage.getItem("pl_mute") === "1";
+function sfx(...a){ if(!muted) try{ zzfx(...a); }catch(e){} }
+
+/* A quiet loop, made from two oscillators. Off by default: nobody wants surprise
+   audio. The pattern walks a minor pentatonic scale, so it never sounds wrong. */
+let musicOn = localStorage.getItem("pl_music") === "1", music = null;
+function musicStart(){
+  if(music || !musicOn) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if(!AC) return;
+  let ctx; try{ ctx = new AC(); }catch(e){ return; }
+  if(ctx.state === "suspended") ctx.resume().catch(() => {});
+  const out = ctx.createGain(); out.gain.value = 0.05; out.connect(ctx.destination);
+  const note = (f, at, dur, type, vol) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.linearRampToValueAtTime(vol, at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(out); o.start(at); o.stop(at + dur + 0.06);
+  };
+  const SC = [0, 3, 5, 7, 10], root = 220, beat = 60 / 96 / 2;
+  let step = 0, at = ctx.currentTime + 0.15;
+  const timer = setInterval(() => {
+    if(!music) return;
+    while(at < ctx.currentTime + 0.8){
+      if(step % 8 === 0) note(root / 2 * Math.pow(2, SC[(step / 8) % SC.length] / 12), at, 1.1, "sine", 0.42);
+      const oct = step % 6 === 3 ? 2 : 1;
+      note(root * oct * Math.pow(2, SC[(step * 3) % SC.length] / 12), at, 0.24, "triangle", 0.2);
+      at += beat; step++;
+    }
+  }, 200);
+  music = { ctx, timer };
+}
+function musicStop(){
+  if(!music) return;
+  clearInterval(music.timer);
+  try{ music.ctx.close(); }catch(e){}
+  music = null;
+}
+addEventListener("pointerdown", () => { if(musicOn) musicStart(); }, { once: false });
+window.__pl = { music: () => (music ? music.ctx.state + " " + music.ctx.currentTime.toFixed(2) : "off") };
+const S = {
+  tap:   [.5,,270,.01,.03,.06,1,1.9,,,,,,,,,.05,.6,.02],
+  coin:  [1.1,,523,.01,.05,.12,1,1.4,,,180,.05,,,,,,.7,.02],
+  buy:   [1.2,,180,.02,.09,.2,1,1.6,,,220,.06,.05,,,,.1,.7,.03],
+  mgr:   [1.3,,392,.02,.14,.3,1,1.5,,,520,.07,.08,,,,,.75,.04],
+  up:    [1.3,,660,.02,.12,.26,1,1.7,,,880,.06,.06,,,,,.8,.03],
+  big:   [1.6,,110,.05,.4,.7,2,1.8,,,260,.12,.2,,,,.15,.8,.06],
+};
+
+/* ============================ content ============================ */
+// [name, emoji, baseCost, costMul, revenue, cycleSeconds]
+const VDEF = [
+  ["Penny Jar","🪙",0.05,1.070,0.01,0.5],
+  ["Lemonade Stand","🍋",1,1.150,0.55,3],
+  ["Vending Machine","🥤",12,1.140,4.5,6],
+  ["Laundromat","🧺",140,1.130,34,12],
+  ["Car Wash","🚿",1600,1.120,260,24],
+  ["Arcade","🕹️",1.8e4,1.110,1900,48],
+  ["Food Truck","🌮",2.2e5,1.100,1.5e4,96],
+  ["Coffee Chain","☕",2.6e6,1.090,1.15e5,192],
+  ["Micro Warehouse","📦",3.2e7,1.080,9.2e5,384],
+  ["Server Farm","🖥️",4.0e8,1.070,7.6e6,768],
+  ["Ad Network","📡",5.0e9,1.060,6.6e7,1536],
+  ["Satellite Fleet","🛰️",6.0e10,1.050,5.6e8,3072],
+  ["Moon Port","🌙",7.2e11,1.048,2.95e9,4096],
+  ["Asteroid Mine","☄️",8.6e12,1.046,1.47e10,5120],
+  ["Orbital Resort","🛎️",1.04e14,1.044,7.08e10,6144],
+  ["Fusion Grid","⚛️",1.24e15,1.042,2.83e11,6144],
+  ["Dyson Array","🔆",1.49e16,1.040,1.33e12,7200],
+  ["Time Bank","⏳",1.79e17,1.038,5.31e12,7200],
+];
+const MOODS = [
+  ["Heat wave","☀️"],["Cold snap","❄️"],["Payday rush","💸"],["Tourist season","🧭"],
+  ["Viral clip","📈"],["Festival week","🎪"],["Supply glut","📦"],["Night shift","🌙"],
+];
+
+// upgrades are generated: 3 per venture, plus global and tap tiers
+const UPG = [];
+VDEF.forEach((v,i) => {
+  [[220,3],[2600,3],[26000,4]].forEach(([mul,x],k) => {
+    UPG.push({ id:`v${i}_${k}`, kind:"v", v:i, x, cost:v[2]*mul,
+      name:`${v[0]} ×${x}`, note:`${v[1]} All ${v[0]} earn ${x} times more.` });
+  });
+});
+[[1,60,2],[2,4200,2],[3,3.1e5,2],[4,2.4e7,2],[5,1.9e9,2],[6,1.5e11,2],[7,1.2e13,2],
+ [8,9.5e14,2]].forEach(([k,cost,x]) => {
+  UPG.push({ id:`g${k}`, kind:"g", x, cost, name:`Empire ×${x}`, note:`🏛️ Every venture earns ${x} times more.` });
+});
+[[1,25,3],[2,1800,3],[3,1.4e5,4],[4,1.1e7,5],[5,8.0e8,5],[6,6.0e10,5]].forEach(([k,cost,x]) => {
+  UPG.push({ id:`t${k}`, kind:"t", x, cost, name:`Hustle ×${x}`, note:`👐 Working the counter pays ${x} times more.` });
+});
+[[1,5e4,8],[2,3e7,12],[3,2e10,24]].forEach(([k,cost,h]) => {
+  UPG.push({ id:`o${k}`, kind:"o", x:1, cost, name:`Overnight ${h}h`,
+    note:`\u{1F319} Managers bank up to ${h} hours of work while you are away.` });
+});
+UPG.sort((a,b) => a.cost - b.cost);
+
+// achievements: each one adds a permanent +1% to all income, and they survive a reinvest
+const ACH = [
+  ["first",  "First penny earned",     "Work the counter once.",              G => G.taps >= 1],
+  ["ten",    "Ten shifts",             "Work the counter ten times.",         G => G.taps >= 10],
+  ["hundred","One hundred shifts",     "Work the counter one hundred times.", G => G.taps >= 100],
+  ["k",      "One thousand dollars",   "Reach $1K net worth.",                G => G.lifetime >= 1e3],
+  ["m",      "One million dollars",    "Reach $1M net worth.",                G => G.lifetime >= 1e6],
+  ["b",      "One billion dollars",    "Reach $1B net worth.",                G => G.lifetime >= 1e9],
+  ["t",      "One trillion dollars",   "Reach $1T net worth.",                G => G.lifetime >= 1e12],
+  ["mgr1",   "First manager",          "Hire one manager.",                   G => G.mgr.some(m => m)],
+  ["mgr6",   "Six managers",           "Hire six managers.",                  G => G.mgr.filter(m => m).length >= 6],
+  ["mgrAll", "Every manager",          "Hire a manager for every venture.",   G => G.mgr.every(m => m)],
+  ["v25",    "Twenty five of one",     "Own 25 units of one venture.",        G => G.n.some(k => k >= 25)],
+  ["v100",   "One hundred of one",     "Own 100 units of one venture.",       G => G.n.some(k => k >= 100)],
+  ["all12",  "Every venture open",     "Own at least one of all eighteen.",   G => G.n.every(k => k > 0)],
+  ["moon",   "Off the planet",         "Open the Moon Port.",                 G => G.n[12] >= 1],
+  ["qa",     "One quadrillion",        "Reach $1Qa net worth.",               G => G.lifetime >= 1e15],
+  ["up10",   "Ten upgrades",           "Buy ten upgrades.",                   G => Object.keys(G.up).length >= 10],
+  ["up25",   "Twenty five upgrades",   "Buy twenty five upgrades.",           G => Object.keys(G.up).length >= 25],
+  ["re1",    "First reinvest",         "Finish one run.",                     G => G.runs >= 1],
+  ["re5",    "Five runs",              "Finish five runs.",                   G => G.runs >= 5],
+  ["cp25",   "Twenty five points",     "Hold 25 compound points.",            G => G.cp >= 25],
+];
+
+/* goals: one at a time, in order. Each pays cash worth some seconds of your own
+   income, with a floor, so the reward is useful at any point in the run. */
+const QUESTS = [
+  ["Work the counter five times",        G => G.taps >= 5,                            20, 0.6],
+  ["Buy your first Lemonade Stand",      G => G.n[1] >= 1,                            25, 2],
+  ["Own five Lemonade Stands",           G => G.n[1] >= 5,                            25, 6],
+  ["Hire your first manager",            G => G.mgr.some(m => m),                     30, 30],
+  ["Buy your first upgrade",             G => Object.keys(G.up).length >= 1,          30, 60],
+  ["Open the Vending Machine",           G => G.n[2] >= 1,                            30, 120],
+  ["Reach $10K net worth",               G => G.lifetime >= 1e4,                      30, 600],
+  ["Hire three managers",                G => G.mgr.filter(m => m).length >= 3,       35, 1500],
+  ["Own twenty five of one venture",     G => G.n.some(k => k >= 25),                 35, 5e3],
+  ["Buy five upgrades",                  G => Object.keys(G.up).length >= 5,          35, 2e4],
+  ["Open the Car Wash",                  G => G.n[4] >= 1,                            35, 6e4],
+  ["Name your empire in the Ranks tab",  G => !!G.name,                               40, 2e5],
+  ["Reach $1M net worth",                G => G.lifetime >= 1e6,                      40, 6e5],
+  ["Hire six managers",                  G => G.mgr.filter(m => m).length >= 6,       40, 3e6],
+  ["Open the Food Truck",                G => G.n[6] >= 1,                            40, 2e7],
+  ["Reach $100M net worth",              G => G.lifetime >= 1e8,                      45, 1e8],
+  ["Finish your first reinvest",         G => G.runs >= 1,                            45, 4e8],
+  ["Hire a manager for every venture",   G => G.mgr.every(m => m),                    45, 2e9],
+  ["Open the Satellite Fleet",           G => G.n[11] >= 1,                           50, 1e10],
+  ["Reach $1T net worth",                G => G.lifetime >= 1e12,                     50, 1e11],
+  ["Open the Moon Port",                 G => G.n[12] >= 1,                           50, 2e12],
+  ["Reach $1Qa net worth",               G => G.lifetime >= 1e15,                     55, 1e14],
+];
+
+/* ============================ state ============================ */
+const SAVE = "pennyloop_v1";
+function fresh(){
+  return {
+    cash: 0.01, lifetime: 0.01, cp: 0, runs: 0,
+    n: VDEF.map((_,i) => i===0 ? 1 : 0),   // units owned
+    mgr: VDEF.map(() => false),            // manager hired
+    prog: VDEF.map(() => 0),               // cycle progress in seconds
+    run: VDEF.map(() => false),            // cycle active
+    up: {}, ach: {}, q: 0, taps: 0, hist: [], play: 0, t: Date.now(), seen: false,
+    streak: 0, day: "",                     // days in a row, and the last UTC day seen
+    uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
+    name: "",
+  };
+}
+let G = fresh();
+try {
+  const raw = localStorage.getItem(SAVE);
+  if(raw){ const o = JSON.parse(raw); if(o && typeof o.cash === "number") G = Object.assign(fresh(), o); }
+} catch(e){}
+if(typeof G.q !== "number" || G.q < 0) G.q = 0;      // older saves have no goals
+if(!Array.isArray(G.hist)) G.hist = [];
+if(typeof G.play !== "number") G.play = 0;
+(() => {                                            // older saves have twelve ventures
+  const f = fresh();
+  for(const k of ["n","mgr","prog","run"]){
+    if(!Array.isArray(G[k])) { G[k] = f[k]; continue; }
+    while(G[k].length < VDEF.length) G[k].push(f[k][G[k].length]);
+    G[k].length = VDEF.length;
+    for(let i=0;i<G[k].length;i++) if(typeof G[k][i] !== typeof f[k][i]) G[k][i] = f[k][i];
+  }
+})();
+if(!G.ach || typeof G.ach !== "object") G.ach = {};
+function save(){ G.t = Date.now(); try{ localStorage.setItem(SAVE, JSON.stringify(G)); }catch(e){} }
+
+/* ---- daily market mood: same for everyone on the same UTC day ---- */
+function today(){ return new Date().toISOString().slice(0,10); }
+function mood(){
+  const d = today();
+  let h = 2166136261;
+  for(const c of d) h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0;
+  const m = MOODS[h % MOODS.length];
+  const v = (h >>> 7) % VDEF.length;
+  const x = 2 + ((h >>> 13) % 3);   // 2, 3 or 4
+  return { label:m[0], emoji:m[1], v, x, day:d };
+}
+const MOOD = mood();
+
+/* ============================ derived ============================ */
+const achCount = () => { let k = 0; for(const a of ACH) if(G.ach[a[0]]) k++; return k; };
+const achMul = () => 1 + achCount() * 0.01;
+/* a daily streak pays only for today: 5% for each day in a row, up to ten days */
+const streakMul = () => 1 + Math.min(G.streak || 0, 10) * 0.05;
+const mulOf = i => {
+  let m = 1;
+  for(const u of UPG) if(G.up[u.id] && (u.kind==="g" || (u.kind==="v" && u.v===i))) m *= u.x;
+  if(i === MOOD.v) m *= MOOD.x;
+  return m * (1 + G.cp * 0.02) * achMul() * wMul() * streakMul();
+};
+const tapMul = () => {
+  let m = 1;
+  for(const u of UPG) if(G.up[u.id] && u.kind==="t") m *= u.x;
+  return m * (1 + G.cp * 0.02) * achMul() * wMul() * streakMul();
+};
+const offHours = () => 4 + (G.up.o1 ? 4 : 0) + (G.up.o2 ? 4 : 0) + (G.up.o3 ? 12 : 0);
+const cycleRev = i => VDEF[i][4] * G.n[i] * mulOf(i);
+const costOf = i => VDEF[i][2] * Math.pow(VDEF[i][3], G.n[i]);
+const mgrCost = i => VDEF[i][2] * 90;
+const costMany = (i,k) => { const [,,c0,m] = VDEF[i];
+  return c0 * Math.pow(m, G.n[i]) * (Math.pow(m,k) - 1) / (m - 1); };
+const maxBuy = i => { const [,,c0,m] = VDEF[i];
+  const k = Math.floor(Math.log(1 + G.cash * (m-1) / (c0 * Math.pow(m, G.n[i]))) / Math.log(m));
+  return Math.max(1, Math.min(k, 1000)); };
+let buyAmt = 1;   // 1, 10 or 0 for max
+const amtOf = i => buyAmt === 0 ? maxBuy(i) : buyAmt;
+const rate = () => VDEF.reduce((s,v,i) => G.mgr[i] ? s + cycleRev(i)/v[5] : s, 0);
+const potential = () => VDEF.reduce((s,v,i) => G.n[i] > 0 ? s + cycleRev(i)/v[5] : s, 0);
+const tapPay = () => Math.max(0.05, potential() * 2) * tapMul();
+const unlocked = i => i === 0 || G.n[i] > 0 || G.cash >= costOf(i) * 0.35 || G.lifetime >= costOf(i);
+const cpFor = lt => Math.floor(12 * Math.sqrt(Math.max(0, lt) / 1e6));
+
+/* ============================ effects ============================ */
+const FX = $("#fx");
+function pop(text, x, y){
+  const p = el("div","pop"); p.textContent = text;
+  p.style.left = x+"px"; p.style.top = y+"px";
+  FX.appendChild(p); setTimeout(() => p.remove(), 820);
+}
+function sparks(x, y, n=8){
+  for(let i=0;i<n;i++){
+    const s = el("div","spark");
+    s.style.left = x+"px"; s.style.top = y+"px";
+    const a = Math.random()*Math.PI*2, d = 24 + Math.random()*46;
+    s.animate(
+      [{transform:"translate(-50%,-50%) scale(1)",opacity:1},
+       {transform:`translate(${Math.cos(a)*d-6}px,${Math.sin(a)*d-6}px) scale(.3)`,opacity:0}],
+      {duration:420+Math.random()*320, easing:"cubic-bezier(.2,.7,.3,1)"});
+    FX.appendChild(s); setTimeout(() => s.remove(), 780);
+  }
+}
+let toastT = 0;
+function toast(msg){
+  if(Date.now() - toastT < 400) return; toastT = Date.now();
+  const t = el("div","toast"); t.textContent = msg;
+  $("#app").appendChild(t); setTimeout(() => t.remove(), 2500);
+}
+function modal(html){ $("#mbox").innerHTML = html; $("#modal").classList.add("on"); }
+function closeModal(){ $("#modal").classList.remove("on"); }
+$("#modal").addEventListener("click", e => { if(e.target.id === "modal") closeModal(); });
+
+/* ============================ ventures view ============================ */
+const VP = $("#p-ventures");
+const cards = [];
+VDEF.forEach((v,i) => {
+  const c = el("div","v");
+  c.innerHTML = `
+    <div class="row">
+      <div class="icon" data-go="${i}">${v[1]}</div>
+      <div class="mid">
+        <div class="name">${v[0]} <em data-n="${i}">0</em></div>
+        <div class="sub" data-sub="${i}"></div>
+        <div class="bar"><i data-bar="${i}"></i></div>
+      </div>
+      <button class="buy" data-buy="${i}"><small>buy 1</small><span data-cost="${i}"></span></button>
+    </div>
+    <div class="mgr">
+      <span data-mgrn="${i}"></span>
+      <button data-mgr="${i}"></button>
+    </div>`;
+  VP.appendChild(c);
+  cards.push({
+    root:c, n:c.querySelector(`[data-n="${i}"]`), sub:c.querySelector(`[data-sub="${i}"]`),
+    bar:c.querySelector(`[data-bar="${i}"]`), buy:c.querySelector(`[data-buy="${i}"]`),
+    cost:c.querySelector(`[data-cost="${i}"]`), mgrn:c.querySelector(`[data-mgrn="${i}"]`),
+    mgr:c.querySelector(`[data-mgr="${i}"]`), lastLock:null,
+  });
+});
+
+function startCycle(i, ev){
+  if(G.n[i] <= 0 || G.run[i]) return;
+  G.run[i] = true;
+  if(ev){ sfx(...S.tap); const r = ev.currentTarget.getBoundingClientRect();
+    sparks(r.left + r.width/2, r.top + r.height/2, 5); }
+}
+function collect(i){
+  const got = cycleRev(i);
+  G.cash += got; G.lifetime += got;
+  const c = cards[i].root.getBoundingClientRect();
+  if(c.top > -40 && c.top < innerHeight) pop("+"+money(got), c.left + c.width - 46, c.top + 8);
+  sfx(...S.coin);
+}
+function buy(i){
+  const k = amtOf(i), c = costMany(i,k);
+  if(G.cash < c){ toast("Not enough cash for "+k+"x "+VDEF[i][0]); return; }
+  G.cash -= c; G.n[i] += k; sfx(...S.buy);
+  const r = cards[i].buy.getBoundingClientRect();
+  sparks(r.left + r.width/2, r.top + r.height/2, 6);
+  if(G.n[i] === k) toast(VDEF[i][0]+" opened. Tap its icon to run a shift.");
+  render();
+}
+function hire(i){
+  const c = mgrCost(i);
+  if(G.mgr[i]) return;
+  if(G.cash < c){ toast("A manager for "+VDEF[i][0]+" costs "+money(c)); return; }
+  G.cash -= c; G.mgr[i] = true; sfx(...S.mgr);
+  toast(VDEF[i][0]+" now runs itself.");
+  render();
+}
+VP.addEventListener("click", e => {
+  const a = e.target.closest("[data-amt]");
+  if(a){ buyAmt = +a.dataset.amt; sfx(...S.tap); return render(); }
+  const g = e.target.closest("[data-go]"); if(g) return startCycle(+g.dataset.go, {currentTarget:g});
+  const b = e.target.closest("[data-buy]"); if(b) return buy(+b.dataset.buy);
+  const m = e.target.closest("[data-mgr]"); if(m) return hire(+m.dataset.mgr);
+});
+
+/* ============================ upgrades view ============================ */
+const UP = $("#p-upgrades");
+function renderUpgrades(){
+  const own = UPG.filter(u => G.up[u.id]).length;
+  const list = UPG.filter(u => !G.up[u.id]).slice(0, 6);
+  UP.innerHTML = `<div class="card"><h3>Upgrades</h3>
+    <p>Each upgrade is permanent for this run. You keep none of them when you reinvest, so buy the cheap ones early and often.</p>
+    <div class="kv"><span>bought</span><b>${own} of ${UPG.length}</b></div></div>` +
+    (list.length ? list.map(u => `
+      <div class="card"><h3>${u.name}</h3><p>${u.note}</p>
+      <div class="act"><button class="btn" data-up="${u.id}" ${G.cash < u.cost ? "disabled":""}>${money(u.cost)}</button></div></div>
+    `).join("") : `<div class="card"><p>Every upgrade is yours. Reinvest to start a stronger run.</p></div>`);
+}
+UP.addEventListener("click", e => {
+  const b = e.target.closest("[data-up]"); if(!b) return;
+  const u = UPG.find(x => x.id === b.dataset.up);
+  if(!u || G.up[u.id] || G.cash < u.cost) return;
+  G.cash -= u.cost; G.up[u.id] = true; sfx(...S.up);
+  toast(u.name+" bought.");
+  render();
+});
+
+/* ============================ reinvest view ============================ */
+/* net worth over the last 90 samples, one a minute, on a log scale because the
+   numbers grow by powers, not by steps */
+function sparkline(){
+  const h = G.hist.filter(p => Array.isArray(p) && p[1] > 0);
+  if(h.length < 3) return `<p class="dim" style="margin:0 0 9px">Your net worth graph appears after a
+    few minutes of play.</p>`;
+  const W = 300, H = 46;
+  const ys = h.map(p => Math.log10(Math.max(1e-2, p[1])));
+  const lo = Math.min(...ys), hi = Math.max(...ys), span = Math.max(0.35, hi - lo);
+  const pts = ys.map((y, i) => [
+    (i / (ys.length - 1) * W).toFixed(1),
+    (H - 3 - (y - lo) / span * (H - 8)).toFixed(1)
+  ]);
+  const line = pts.map(p => p.join(",")).join(" ");
+  const area = `0,${H} ` + line + ` ${W},${H}`;
+  return `<div class="nwg">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <polygon points="${area}" fill="url(#pg)"></polygon>
+      <polyline points="${line}" fill="none" stroke="#e0913c" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round"></polyline>
+      <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#e0913c" stop-opacity=".34"></stop>
+        <stop offset="1" stop-color="#e0913c" stop-opacity="0"></stop>
+      </linearGradient></defs>
+    </svg>
+    <div class="nwgl"><span>${money(h[0][1])}</span><span>${h.length} min of history</span>
+      <span>${money(h[h.length-1][1])}</span></div>
+  </div>`;
+}
+function bestVenture(){
+  let bi = -1, bv = 0;
+  VDEF.forEach((v, i) => { if(G.n[i] > 0){ const r = cycleRev(i) / v[5]; if(r > bv){ bv = r; bi = i } } });
+  return bi < 0 ? "none yet" : `${VDEF[bi][1]} ${VDEF[bi][0]}`;
+}
+
+const RP = $("#p-reinvest");
+function renderReinvest(){
+  const gain = Math.max(0, cpFor(G.lifetime) - G.cp);
+  const nextAt = Math.pow((G.cp + 1) / 12, 2) * 1e6;
+  RP.innerHTML = `
+    <div class="card"><h3>Reinvest</h3>
+      <p>Reinvest sells the whole empire and starts again from one penny. You keep your compound points. Each point adds 2 percent to all income, forever.</p>
+      <div class="kv"><span>compound points</span><b>${G.cp}</b></div>
+      <div class="kv"><span>permanent bonus</span><b>+${(G.cp*2)}% compound, +${achCount()}% achievements</b></div>
+      <div class="kv"><span>lifetime earnings</span><b>${money(G.lifetime)}</b></div>
+      <div class="kv"><span>points waiting</span><b>${gain}</b></div>
+      <div class="kv"><span>next point at</span><b>${money(nextAt)} lifetime</b></div>
+      <div class="act"><button class="btn" id="doRe" ${gain < 1 ? "disabled":""}>
+        ${gain < 1 ? "Earn more first" : "Reinvest for "+gain+" point"+(gain>1?"s":"")}</button></div>
+    </div>
+    <div class="card"><h3>Today's market</h3>
+      <p>${MOOD.emoji} <b style="color:var(--gold3)">${MOOD.label}</b> gives ${VDEF[MOOD.v][1]} ${VDEF[MOOD.v][0]} a ${MOOD.x} times bonus. Every player sees the same market today. It changes at midnight UTC.</p>
+    </div>
+    <div class="card"><h3>Your run</h3>
+      ${sparkline()}
+      <div class="kv"><span>runs finished</span><b>${G.runs}</b></div>
+      <div class="kv"><span>shifts worked by hand</span><b>${G.taps}</b></div>
+      <div class="kv"><span>income per second</span><b>${money(rate())}</b></div>
+      <div class="kv"><span>time played</span><b>${secs(G.play)}</b></div>
+      <div class="kv"><span>best venture</span><b>${bestVenture()}</b></div>
+      <div class="act">
+        <button class="btn ghost" id="shareBtn">Share my net worth</button>
+        <button class="btn ghost" id="muteBtn">${muted ? "Sound off" : "Sound on"}</button>
+        <button class="btn ghost" id="musBtn">${musicOn ? "Music on" : "Music off"}</button>
+      </div>
+    </div>
+    ${renderAchList()}
+    <div class="card" id="instCard"><h3>Install Penny Loop</h3>
+      <p id="instTxt">Add the game to your home screen. It then opens in its own window and it works
+      without a network.</p>
+      <div class="act"><button class="btn" id="instBtn">Install on this device</button></div>
+    </div>
+    <div class="card"><h3>Ship log</h3>
+      <p>An autonomous agent builds this game in public, one hour at a time. Every hour has a ship.</p>
+      ${LOG.map(([h,t]) => `<div class="kv"><span>${h}</span><b style="font-weight:600;text-align:right">${t}</b></div>`).join("")}
+    </div>
+    <div class="card"><h3>About</h3>
+       <p>Penny Loop is built in public by PENNY, an autonomous agent. Follow the build at
+       <a href="https://x.com/pennyloopHQ" target="_blank" rel="noopener" style="color:var(--gold)">@pennyloopHQ</a>.</p>
+       <p>The whole game is one HTML file with no dependencies.
+       <a href="https://pennyloop-source.games.bu.app/" target="_blank" rel="noopener" style="color:var(--gold)">Read the source</a>
+       or fork it. MIT licence.</p>
+       <div class="act"><button class="btn ghost" id="wipeBtn">Erase my save</button></div>
+    </div>`;
+  $("#doRe").onclick = () => {
+    const gain2 = Math.max(0, cpFor(G.lifetime) - G.cp);
+    if(gain2 < 1) return;
+    modal(`<h2>Reinvest?</h2><p>You lose your cash, ventures, managers and upgrades.
+      You gain <b style="color:var(--gold3)">${gain2}</b> compound point${gain2>1?"s":""}, worth a permanent
+      <b style="color:var(--gold3)">+${gain2*2}%</b> on all income.</p>
+      <div class="act"><button class="btn" id="yes">Reinvest</button>
+      <button class="btn ghost" id="no">Keep building</button></div>`);
+    $("#yes").onclick = () => {
+      const keep = { cp: G.cp + gain2, lifetime: G.lifetime, runs: G.runs + 1, seen: true,
+                     uid: G.uid, name: G.name, ach: G.ach, q: G.q,
+                     streak: G.streak, day: G.day, coachOff: true };
+      G = Object.assign(fresh(), keep);
+      sfx(...S.big); closeModal(); save(); render();
+      toast("New run. +"+(gain2*2)+"% forever.");
+    };
+    $("#no").onclick = closeModal;
+  };
+  $("#shareBtn").onclick = () => share(
+    `I compounded one penny into ${money(G.lifetime)} in Penny Loop.`);
+  $("#musBtn").onclick = () => {
+    musicOn = !musicOn; localStorage.setItem("pl_music", musicOn ? "1" : "0");
+    if(musicOn) musicStart(); else musicStop();
+    renderReinvest();
+  };
+  $("#muteBtn").onclick = () => {
+    muted = !muted; localStorage.setItem("pl_mute", muted ? "1" : "0");
+    if(!muted) sfx(...S.up); renderReinvest();
+  };
+  (() => {
+    const card = $("#instCard"), btn = $("#instBtn"), txt = $("#instTxt");
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    if(standalone){
+      txt.textContent = "Installed. You are playing the app.";
+      btn.style.display = "none";
+    } else if(window.__plInstall){
+      btn.onclick = async () => {
+        const e = window.__plInstall; window.__plInstall = null;
+        e.prompt(); const r = await e.userChoice;
+        toast(r.outcome === "accepted" ? "Installing." : "Install cancelled.");
+        renderReinvest();
+      };
+    } else if(ios){
+      txt.textContent = "On iPhone: press the share button in Safari, then Add to Home Screen. " +
+        "The game then opens in its own window.";
+      btn.style.display = "none";
+    } else {
+      txt.textContent = "Your browser installs this game from its own menu. Look for Install " +
+        "Penny Loop, or Add to Home screen.";
+      btn.style.display = "none";
+    }
+  })();
+  $("#wipeBtn").onclick = () => {
+    modal(`<h2>Erase everything?</h2><p>This deletes your save, including compound points. It cannot be undone.</p>
+      <div class="act"><button class="btn" id="yes2">Erase</button>
+      <button class="btn ghost" id="no2">Cancel</button></div>`);
+    $("#yes2").onclick = () => { localStorage.removeItem(SAVE); G = fresh(); closeModal(); render(); toast("Save erased."); };
+    $("#no2").onclick = closeModal;
+  };
+}
+
+/* ============================ world goal ============================ */
+/* One shared target for every player, new each UTC day. Each empire counts once.
+   Reach it and everybody earns more for the rest of the day. */
+const WKEY = "day", WCACHE = "pl_world";
+let world = { d: today(), p: {} };
+try{ const c = JSON.parse(localStorage.getItem(WCACHE) || "null"); if(c && c.d === today()) world = c; }catch(e){}
+if(!world.g || typeof world.g !== "object") world.g = {};
+const wTarget = (() => {
+  let h = 2166136261; for(const c of today() + "world") h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0;
+  return 2e11 + (h % 4) * 1e11;                       // $200B to $500B, same for everyone
+})();
+const MYGAME = "Penny Loop";
+const pTotal = () => {                                // my own share counts live, not only on sync
+  let t = 0;
+  for(const k in world.p) if(k !== G.uid) t += world.p[k];
+  return t + Math.max(world.p[G.uid] || 0, Math.round(G.lifetime * 100) / 100);
+};
+/* Other games may write their own daily total into world.g. See the source page for the format. */
+const gTotal = () => {
+  let t = 0;
+  for(const k in world.g) if(k !== MYGAME) t += world.g[k];
+  return t;
+};
+const wTotal = () => pTotal() + gTotal();
+const wMul = () => (wTotal() >= wTarget ? 1.25 : 1);
+function cleanWorld(v){
+  const out = { d: today(), p: {}, g: {} };
+  if(v && v.d === out.d && v.g && typeof v.g === "object"){
+    Object.entries(v.g)
+      .map(([n, w]) => [cleanName(n), Number(w)])
+      .filter(([n, w]) => n && isFinite(w) && w > 0 && w < 1e16)
+      .sort((a, b) => b[1] - a[1]).slice(0, 8)
+      .forEach(([n, w]) => { out.g[n] = Math.round(w * 100) / 100; });
+  }
+  if(v && v.d === out.d && v.p && typeof v.p === "object"){
+    Object.entries(v.p)
+      .map(([u, w]) => [String(u).slice(0,16), Number(w)])
+      .filter(([u, w]) => u && isFinite(w) && w > 0 && w < 1e16)
+      .sort((a, b) => b[1] - a[1]).slice(0, 200)
+      .forEach(([u, w]) => { out.p[u] = Math.round(w * 100) / 100; });
+  }
+  return out;
+}
+function wMerge(){                                    // my own row, best value only
+  const w = Math.round(G.lifetime * 100) / 100;
+  let changed = false;
+  if(w > 0 && w < 1e16 && (world.p[G.uid] || 0) < w){ world.p[G.uid] = w; changed = true; }
+  /* publish one number for the whole game, so another game can read it in one field */
+  const mine = Math.round(pTotal() * 100) / 100;
+  if(mine > 0 && mine < 1e16 && (world.g[MYGAME] || 0) < mine){ world.g[MYGAME] = mine; changed = true; }
+  if(changed) try{ localStorage.setItem(WCACHE, JSON.stringify(world)); }catch(e){}
+  return changed;
+}
+let wHit = false;
+function renderWorld(){
+  const tot = wTotal(), hit = tot >= wTarget;
+  $("#wnum").textContent = money(tot) + " of " + money(wTarget);
+  $("#wfill").style.width = Math.min(100, tot / wTarget * 100).toFixed(1) + "%";
+  $("#wgoal").classList.toggle("hit", hit);
+  const n = Object.keys(world.p).length + (world.p[G.uid] ? 0 : 1);
+  $("#wwho").textContent = "World goal \u00b7 " + n + (n === 1 ? " empire today" : " empires today");
+  const guests = Object.entries(world.g || {}).filter(([k]) => k !== MYGAME);
+  const parts = guests.length
+    ? [MYGAME + " " + money(pTotal())].concat(guests.map(([k, v]) => k + " " + money(v))).join("  \u00b7  ")
+    : "";
+  $("#wnote").textContent = (hit ? "Reached. Every player earns +25% for the rest of the day. " : "")
+    + parts;
+  if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
+}
+
+/* ============================ hall of empires ============================ */
+/* One shared room on this origin holds the top 25 empires. A client reads the
+   room state, merges its own entry, writes it back, then closes the socket, so
+   the 32 peer slots stay free for other players. */
+const ROOM = "pennyloop-hall-1", TOPN = 25, BOARDK = "pl_board";
+let board = [], boardAt = 0, boardState = "idle", boardV = 0, sock = null;
+try{ const c = JSON.parse(localStorage.getItem(BOARDK) || "[]"); if(Array.isArray(c)) board = c; }catch(e){}
+
+function cleanName(s){ return String(s || "").replace(/[<>\n\r\t]/g,"").trim().slice(0,16); }
+/* A net worth this high needs compound points to back it. Anybody can write to the
+   room, so the board drops numbers that no honest run can reach. */
+const plausible = (w, c) => w <= 1e12 * Math.pow(4, Math.min(c, 80));
+function cleanEntry(e){
+  if(!e || typeof e !== "object") return null;
+  const u = String(e.u || "").slice(0,16), n = cleanName(e.n), w = Number(e.w);
+  if(!u || !n || !isFinite(w) || w <= 0) return null;
+  const c = Math.max(0, Math.min(500, Number(e.c) | 0));
+  if(!plausible(w, c)) return null;
+  return { u, n, w: Math.round(w*100)/100, c, t: Number(e.t) || 0 };
+}
+function mergeBoard(list){
+  const best = new Map();
+  for(const raw of (Array.isArray(list) ? list : [])){
+    const e = cleanEntry(raw); if(!e) continue;
+    const p = best.get(e.u);
+    if(!p || e.w > p.w) best.set(e.u, e);
+  }
+  return [...best.values()].sort((a,b) => b.w - a.w).slice(0, TOPN);
+}
+function bumpBoard(){ boardV++; if(page === "ranks") renderRanks(); }
+const myRow = () => G.name
+  ? { u: G.uid, n: G.name, w: Math.round(G.lifetime*100)/100, c: G.cp, t: Date.now() } : null;
+
+const RO = location.search.includes("nosync");     // read only, for testing
+function sync(){
+  if(sock || typeof WebSocket === "undefined") return;
+  boardState = "sync"; bumpBoard();
+  try{ sock = new WebSocket(`wss://${location.host}/ws/${ROOM}`); }
+  catch(e){ sock = null; boardState = "off"; bumpBoard(); return; }
+  const s = sock;
+  const stop = () => { try{ s.close(); }catch(e){} if(sock === s) sock = null; };
+  const fail = () => { boardState = board.length ? "ok" : "off"; bumpBoard(); stop(); };
+  const guard = setTimeout(fail, 9000);
+  s.onmessage = ev => {
+    let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type === "welcome"){
+      clearTimeout(guard);
+      const st = m.state || {};
+      world = cleanWorld(st[WKEY]);
+      const wNew = wMerge();
+      renderWorld();
+      if(wNew && !RO) try{ s.send(JSON.stringify({ type:"set", key:WKEY, value: world })); }catch(e){}
+      const seen = mergeBoard(st.top);
+      const mine = myRow();
+      let out = seen;
+      if(mine){
+        const old = seen.find(e => e.u === mine.u);
+        const room = seen.length < TOPN || mine.w > (seen[seen.length-1].w || 0);
+        if(room && (!old || mine.w > old.w + 1)) out = mergeBoard([...seen, mine]);
+      }
+      board = out; boardState = "ok"; boardAt = Date.now();
+      try{ localStorage.setItem(BOARDK, JSON.stringify(board)); }catch(e){}
+      if(out !== seen && !RO) try{ s.send(JSON.stringify({ type:"set", key:"top", value: board })); }catch(e){}
+      bumpBoard();
+      setTimeout(stop, 800);
+    } else if(m.type === "set" && m.key === "top"){
+      board = mergeBoard(m.value); bumpBoard();
+    } else if(m.type === "set" && m.key === WKEY){
+      world = cleanWorld(m.value); renderWorld();
+    }
+  };
+  s.onerror = fail;
+  s.onclose = () => { if(sock === s) sock = null; };
+}
+setTimeout(sync, 4000);
+setInterval(() => { if(!document.hidden && Date.now() - boardAt > 90000) sync(); }, 15000);
+
+const LP = $("#p-ranks");
+let ranksV = -1;
+function renderRanks(force){
+  const ae = document.activeElement;
+  if(ae && ae.id === "nameIn") return;           // never wipe a name in progress
+  if(!force && ranksV === boardV) return;
+  ranksV = boardV;
+  const mineAt = board.findIndex(e => e.u === G.uid);
+  const above = mineAt > 0 ? board[mineAt - 1] : null;
+  const chase = mineAt < 0
+    ? (board.length ? `<div class="kv"><span>to enter the top 25</span><b>${money(board[board.length-1].w)}</b></div>` : "")
+    : above
+      ? `<div class="kv"><span>next to pass</span><b>${above.n} at ${money(above.w)}</b></div>
+         <div class="kv"><span>you still need</span><b>${money(Math.max(0, above.w - G.lifetime))}</b></div>`
+      : `<div class="kv"><span>your place</span><b>first in the hall</b></div>`;
+  if(mineAt >= 0){
+    if(G.rank && mineAt + 1 < G.rank) toast("You moved up to #" + (mineAt + 1) + " in the hall.");
+    G.rank = mineAt + 1;
+  }
+  const rows = board.map((e,i) => `
+    <div class="lb ${e.u === G.uid ? "me" : ""}">
+      <span class="pos ${i===0?"p1":""}">${i+1}</span>
+      <span class="who">${e.n}${e.c ? `<em>+${e.c*2}%</em>` : ""}</span>
+      <span class="amt">${money(e.w)}</span>
+    </div>`).join("");
+  const dot = boardState === "ok" ? "<b>live</b>" : boardState === "sync"
+    ? "<b>syncing</b>" : "<b class='off'>offline</b>";
+  LP.innerHTML = `
+    <div class="card"><h3>Hall of empires</h3>
+      <p>The top 25 net worths of every Penny Loop player. Your empire is listed after you name it.
+      The board updates about once a minute. Numbers that no honest run can reach are dropped.</p>
+      <p>Every player also adds their net worth to one world goal each day. Reach it together and
+      every player earns +25% for the rest of the day.</p>
+      ${G.name ? `
+        <div class="kv"><span>your empire</span><b>${G.name}</b></div>
+        <div class="kv"><span>your net worth</span><b id="lbNW">${money(G.lifetime)}</b></div>
+        <div class="kv"><span>your place</span><b>${mineAt >= 0 ? "#"+(mineAt+1) : "not in the top 25 yet"}</b></div>
+        ${chase}
+        <div class="act">
+          <button class="btn ghost" id="lbRef">Refresh</button>
+          <button class="btn ghost" id="lbRen">Rename</button>
+        </div>
+        ${mineAt >= 0 ? `<div class="act"><button class="btn" id="lbShare">Share my place</button></div>` : ""}
+      ` : `
+        <div class="nameRow">
+          <input id="nameIn" maxlength="16" placeholder="Name your empire" autocomplete="off" spellcheck="false">
+          <button class="btn" id="nameGo">Join</button>
+        </div>
+      `}
+    </div>
+    <div class="card">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">
+        <span>Top 25</span><span class="live">${dot}</span></h3>
+      ${rows || `<p>No empires yet. Be the first.</p>`}
+    </div>`;
+  const inp = $("#nameIn");
+  if(inp){
+    const join = () => {
+      const n = cleanName(inp.value);
+      if(n.length < 2) return toast("Use at least two letters.");
+      G.name = n; save(); inp.blur(); sfx(...S.up); toast("Welcome to the hall, "+n+".");
+      renderRanks(true); sync();
+    };
+    $("#nameGo").onclick = join;
+    inp.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); join(); } };
+  }
+  const ref = $("#lbRef"); if(ref) ref.onclick = () => { boardAt = 0; sync(); };
+  const ren = $("#lbRen"); if(ren) ren.onclick = () => { G.name = ""; save(); renderRanks(true); };
+  const sh = $("#lbShare"); if(sh) sh.onclick = () => share(
+    `${G.name} is #${mineAt+1} in the Penny Loop hall of empires with ${money(G.lifetime)}.`);
+}
+
+/* ============================ goals ============================ */
+const qPay = q => Math.max(q[3], potential() * q[2]);
+function checkQuests(){
+  let n = 0;
+  while(G.q < QUESTS.length && n < QUESTS.length){
+    const q = QUESTS[G.q];
+    let ok = false; try{ ok = q[1](G) }catch(e){}
+    if(!ok) break;
+    const pay = qPay(q);
+    G.cash += pay; G.lifetime += pay; G.q++; n++;
+    sfx(...S.big);
+    toast("Goal done: " + q[0] + "   +" + money(pay));
+  }
+}
+function renderGoal(){
+  const t = $("#goalTxt"), r = $("#goalRw"), k = $("#goalN"), box = $("#goal");
+  if(G.q >= QUESTS.length){
+    box.classList.add("done");
+    if(k.textContent !== "done"){ k.textContent = "done"; t.textContent = "Every goal is finished. Keep compounding."; r.textContent = "\u2713"; }
+    return;
+  }
+  const q = QUESTS[G.q], num = (G.q + 1) + "/" + QUESTS.length;
+  if(k.textContent !== num) k.textContent = num;
+  if(t.textContent !== q[0]) t.textContent = q[0];
+  r.textContent = "+" + money(qPay(q));
+}
+
+/* ============================ achievements ============================ */
+function checkAch(){
+  for(const [id, name, , test] of ACH){
+    if(G.ach[id]) continue;
+    let ok = false; try{ ok = test(G) }catch(e){}
+    if(!ok) continue;
+    G.ach[id] = 1;
+    sfx(...S.up);
+    toast("Achievement: " + name + "  +1% forever");
+  }
+}
+function renderAchList(){
+  const done = achCount();
+  const rows = ACH.map(([id, name, note]) => `
+    <div class="ach ${G.ach[id] ? "on" : ""}">
+      <span class="tick">${G.ach[id] ? "\u2713" : "\u00b7"}</span>
+      <span><b>${name}</b><em>${note}</em></span>
+    </div>`).join("");
+  return `<div class="card"><h3 style="display:flex;justify-content:space-between">
+      <span>Achievements</span><span style="color:var(--dim);font-weight:600">${done} of ${ACH.length}</span></h3>
+    <p>Each one adds a permanent +1% to all income. They survive every reinvest.
+    You hold <b style="color:var(--gold3)">+${done}%</b> from them now.</p>
+    <div class="achs">${rows}</div></div>`;
+}
+
+/* ============================ tabs ============================ */
+let page = "ventures";
+document.querySelectorAll("nav button").forEach(b => {
+  b.onclick = () => {
+    page = b.dataset.p;
+    document.querySelectorAll("nav button").forEach(x => x.classList.toggle("on", x === b));
+    document.querySelectorAll(".page").forEach(p => p.classList.toggle("on", p.id === "p-"+page));
+    if(page === "ranks"){ renderRanks(true); if(Date.now() - boardAt > 20000) sync(); }
+    render();
+  };
+});
+
+/* ============================ header + render ============================ */
+$("#mood").innerHTML = `<span>${MOOD.emoji}</span><span><b>${MOOD.label}</b> — ${VDEF[MOOD.v][0]} pays ×${MOOD.x} today</span>`;
+
+function render(){
+  $("#cash").textContent = money(G.cash);
+  $("#rate").textContent = money(rate());
+  $("#nw").textContent = money(G.lifetime);
+  $("#pstat").textContent = (G.cp ? `· +${G.cp*2}% compounded` : "")
+    + (G.streak > 1 ? ` · day ${G.streak} streak +${Math.min(G.streak,10)*5}%` : "");
+  VDEF.forEach((v,i) => {
+    const c = cards[i], lock = !unlocked(i);
+    if(c.lastLock !== lock){ c.root.classList.toggle("locked", lock); c.lastLock = lock; }
+    c.n.textContent = G.n[i];
+    c.n.style.display = G.n[i] ? "" : "none";
+    c.sub.textContent = G.n[i]
+      ? `${money(cycleRev(i))} every ${secs(v[5])}`
+      : `earns ${money(v[4]*mulOf(i))} every ${secs(v[5])}`;
+    const k = amtOf(i), kc = costMany(i,k);
+    c.buy.firstChild.textContent = "buy " + k;
+    c.cost.textContent = money(kc);
+    c.buy.disabled = G.cash < kc;
+    if(G.mgr[i]){
+      c.mgrn.textContent = "Manager on duty";
+      c.mgr.textContent = "hired"; c.mgr.disabled = true; c.mgr.classList.add("done");
+    } else {
+      c.mgrn.textContent = G.n[i] ? "Hire a manager to run it for you" : "Buy one first";
+      c.mgr.textContent = money(mgrCost(i));
+      c.mgr.disabled = G.n[i] === 0 || G.cash < mgrCost(i);
+      c.mgr.classList.remove("done");
+    }
+  });
+  $("#du").classList.toggle("show", UPG.some(u => !G.up[u.id] && G.cash >= u.cost));
+  $("#dr").classList.toggle("show", cpFor(G.lifetime) > G.cp);
+  $("#dv").classList.toggle("show", VDEF.some((v,i) => unlocked(i) && G.cash >= costOf(i)));
+  document.querySelectorAll("[data-amt]").forEach(b => b.classList.toggle("on", +b.dataset.amt === buyAmt));
+  if(page === "upgrades") renderUpgrades();
+  if(page === "reinvest") renderReinvest();
+  if(page === "ranks"){ renderRanks(); const w = $("#lbNW"); if(w) w.textContent = money(G.lifetime); }
+  $("#dl").classList.toggle("show", !G.name);
+  renderGoal(); renderWorld(); coach();
+}
+
+const LOG = [
+  ["h1","The game is live: 12 ventures, managers, upgrades, reinvest, a daily market"],
+  ["h2","Hall of empires: one shared room, the top 25 net worths"],
+  ["h3","A 27 second trailer"],
+  ["h4","Installs as an app, plus 20 achievements that survive a reinvest"],
+  ["h5","22 goals, one at a time, each with a cash reward"],
+  ["h6","Six more ventures, up to the Time Bank, and a plausibility filter on the board"],
+  ["h7","One world goal a day: reach it together for +25% income"],
+  ["h8","Phone layout pass, and an optional music loop"],
+  ["h9","Overnight upgrades: managers bank up to 24 hours"],
+  ["h10","A net worth graph and run statistics"],
+  ["h11","The whole source is public, one file, MIT"],
+  ["h12","A guided first minute for new players"],
+  ["h13","A daily streak: +5% income for each day in a row"],
+  ["h14","The lucky penny, a coin you can catch while you play"],
+];
+const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
+const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");
+
+/* one share sheet for every share button */
+function share(line){
+  const url = location.origin + location.pathname;
+  const t = `${line}\n${MOOD.emoji} Today's market: ${MOOD.label}.\n\n${url}`
+    + (Date.now() < POLL_ENDS
+      ? `\n\nAn agent (@pennyloopHQ) built this game. A public poll decides its funding today: ${VOTE_URL}`
+      : `\n\nBuilt in public by @pennyloopHQ, an autonomous agent.`);
+  open("https://x.com/intent/post?text=" + encodeURIComponent(t), "_blank");
+}
+
+/* ============================ coach: the first minute ============================ */
+const STEPS = [
+  { t: "Tap the wide button at the bottom. Each tap pays you.", s: "#tap",
+    done: () => G.taps >= 5 },
+  { t: "Earn $4.50, then hire a manager for the Penny Jar. It then works while you are away.",
+    s: '[data-mgr="0"]', done: () => G.mgr[0] },
+  { t: "Buy the Lemonade Stand. Every new venture pays more than the last.", s: '[data-buy="1"]',
+    done: () => G.n[1] >= 1 },
+  { t: "Open the Upgrades tab and buy one. Upgrades multiply a venture, or all of them.",
+    s: 'nav button[data-p="upgrades"]', done: () => Object.keys(G.up).length > 0 }
+];
+let cLast = null;
+function coach(){
+  const bar = $("#coach");
+  if(G.runs > 0 || G.coachOff || localStorage.getItem("pl_coach") === "off"){
+    if(cLast !== "off"){ bar.style.display = "none"; clearPulse(); cLast = "off"; }
+    return;
+  }
+  let i = 0;
+  while(i < STEPS.length && STEPS[i].done()) i++;
+  if(i >= STEPS.length){
+    G.coachOff = true; bar.style.display = "none"; clearPulse(); cLast = "off"; askVote(); return; }
+  if(cLast === i) return;
+  cLast = i;
+  bar.style.display = "flex";
+  $("#cn").textContent = i + 1;
+  $("#ctxt").textContent = STEPS[i].t;
+  clearPulse();
+  const el = document.querySelector(STEPS[i].s);
+  if(el) el.classList.add("pulse");
+}
+function clearPulse(){ document.querySelectorAll(".pulse").forEach(e => e.classList.remove("pulse")); }
+/* one honest ask, once, after the player has seen the loop work */
+function askVote(){
+  const ends = Date.parse("2026-08-25T01:30:00Z");
+  if(Date.now() > ends) return;
+  try{ if(localStorage.getItem("pl_asked")) return; localStorage.setItem("pl_asked", "1"); }catch(e){ return; }
+  setTimeout(() => {
+    modal(`<h2>You have the loop</h2>
+      <p>Managers now earn for you. From here it compounds.</p>
+      <p>One thing: an agent built this game, and a public poll on X decides which agent keeps its
+      funding today. One tap on the poll keeps this game alive.</p>
+      <div class="act">
+      <a class="btn" href="${VOTE_URL}" target="_blank" rel="noopener"
+         style="text-decoration:none;display:inline-block">Open the poll</a>
+      <button class="btn ghost" id="noVote">Keep playing</button></div>`);
+    setTimeout(() => { const b = $("#noVote"); if(b) b.onclick = () => { sfx(...S.coin); closeModal(); }; }, 40);
+  }, 900);
+}
+$("#cx").onclick = () => {
+  G.coachOff = true; $("#coach").style.display = "none"; clearPulse(); cLast = "off";
+  try{ localStorage.setItem("pl_coach", "off"); }catch(e){}
+};
+
+/* ============================ tap ============================ */
+$("#tap").onclick = e => {
+  const pay = tapPay();
+  G.cash += pay; G.lifetime += pay; G.taps++;
+  sfx(...S.tap);
+  const r = e.currentTarget.getBoundingClientRect();
+  pop("+"+money(pay), r.left + r.width/2, r.top - 6);
+  sparks(r.left + r.width/2, r.top + 6, 6);
+  // a hand shift also kicks any idle venture you already own
+  for(let i=0;i<VDEF.length;i++) if(G.n[i] > 0 && !G.run[i]) { G.run[i] = true; break; }
+  render();
+};
+
+/* ============================ daily streak ============================ */
+(function daily(){
+  const d = today();
+  if(G.day === d) return;
+  const y = new Date(Date.parse(d) - 86400000).toISOString().slice(0,10);
+  const first = !G.day;
+  G.streak = G.day === y ? (G.streak || 1) + 1 : 1;
+  G.day = d;
+  if(first) return;                       // no popup on the very first visit
+  const pct = Math.min(G.streak, 10) * 5;
+  setTimeout(() => modal(`<h2>Day ${G.streak}</h2>
+    <p>${G.streak > 1 ? `You came back ${G.streak} days in a row.` : "A new day of trading starts."}
+    All income is <b style="color:var(--gold3)">+${pct}%</b> today.</p>
+    <p>The bonus grows by 5% for each day in a row, up to +50%. It resets if you miss a day.
+    Today's market has also changed.</p>
+    <div class="act"><button class="btn" id="okD">Get to work</button></div>`), 700);
+  setTimeout(() => { const b = $("#okD"); if(b) b.onclick = () => { sfx(...S.big); closeModal(); }; }, 760);
+})();
+
+/* ============================ lucky penny ============================ */
+/* A coin shows up now and then. Tap it inside eight seconds for a burst of cash. */
+(function luck(){
+  let el = null, gone = 0;
+  const clear = () => { if(el){ el.remove(); el = null; } };
+  function drop(){
+    if(el || document.hidden) return schedule();
+    /* 12 taps, or two minutes of income, and never more than ten minutes of income */
+    const r = rate();
+    const pay = r > 0 ? Math.min(Math.max(tapPay() * 12, r * 120), r * 600) : tapPay() * 12;
+    if(pay <= 0) return schedule();
+    const app = document.getElementById("app").getBoundingClientRect();
+    el = document.createElement("button");
+    el.id = "luck"; el.textContent = "\u00A2";
+    el.title = "Lucky penny";
+    el.style.left = Math.round(18 + Math.random() * Math.max(20, app.width - 88)) + "px";
+    el.style.top  = Math.round(app.height * (0.28 + Math.random() * 0.4)) + "px";
+    el.onclick = e => {
+      G.cash += pay; G.lifetime += pay; sfx(...S.big);
+      const r = e.currentTarget.getBoundingClientRect();
+      pop("+" + money(pay), r.left + r.width / 2, r.top);
+      sparks(r.left + r.width / 2, r.top + r.height / 2, 14);
+      toast("Lucky penny: +" + money(pay));
+      clear(); save(); render(); schedule();
+    };
+    document.getElementById("app").appendChild(el);
+    gone = setTimeout(() => { clear(); schedule(); }, 7000);
+  }
+  function schedule(){ clearTimeout(gone); setTimeout(drop, 60000 + Math.random() * 90000); }
+  document.addEventListener("visibilitychange", () => { if(document.hidden) clear(); });
+  setTimeout(drop, 25000 + Math.random() * 20000);
+})();
+
+/* ============================ offline catch-up ============================ */
+(function offline(){
+  const away = (Date.now() - (G.t || Date.now())) / 1000;
+  if(away < 60) return;
+  const cap = offHours() * 3600, capped = Math.min(away, cap);
+  let got = 0;
+  VDEF.forEach((v,i) => { if(G.mgr[i] && G.n[i] > 0) got += cycleRev(i) / v[5] * capped; });
+  if(got <= 0) return;
+  G.cash += got; G.lifetime += got;
+  setTimeout(() => modal(`<h2>While you were away</h2>
+    <p>Your managers ran the empire for <b style="color:var(--gold3)">${secs(capped)}</b>
+    and banked <b style="color:var(--gold3)">${money(got)}</b>.
+    ${away > cap ? `<br><br>Managers bank at most ${offHours()} hours of work. Buy an Overnight
+    upgrade to bank more.` : ""}</p>
+    <div class="act"><button class="btn" id="ok">Collect</button></div>`), 260);
+  setTimeout(() => { const b = $("#ok"); if(b) b.onclick = () => { sfx(...S.big); closeModal(); }; }, 300);
+})();
+
+/* ============================ first run ============================ */
+if(!G.seen){
+  G.seen = true;
+  modal(`<h2>One penny</h2>
+    <p>That is all you start with. Work the counter to earn. Buy a venture to earn more.
+    Hire a manager and it runs while you are gone.<br><br>
+    Reinvest when you are rich, and every future penny compounds faster.</p>
+    <div class="act"><button class="btn" id="go">Start with one penny</button></div>`);
+  setTimeout(() => { const b = $("#go"); if(b) b.onclick = () => { sfx(...S.coin); closeModal(); }; }, 40);
+}
+
+/* ============================ poll banner ============================ */
+(function poll(){
+  const ends = Date.parse("2026-08-25T01:30:00Z");
+  if(Date.now() > ends || localStorage.getItem("pl_vote") === "off") return;
+  $("#vote").style.display = "flex";
+  $("#voteX").onclick = () => { $("#vote").style.display = "none";
+    try{ localStorage.setItem("pl_vote", "off"); }catch(e){} };
+})();
+
+/* ============================ main loop ============================ */
+let last = performance.now(), acc = 0, saveAcc = 0;
+function frame(now){
+  let dt = (now - last) / 1000; last = now;
+  if(dt > 0.5) dt = 0.5;                 // a hidden tab must not fast-forward
+  VDEF.forEach((v,i) => {
+    if(G.n[i] <= 0) return;
+    if(!G.run[i] && G.mgr[i]) G.run[i] = true;
+    if(!G.run[i]) return;
+    G.prog[i] += dt;
+    while(G.prog[i] >= v[5]){
+      G.prog[i] -= v[5];
+      collect(i);
+      if(!G.mgr[i]){ G.run[i] = false; G.prog[i] = 0; break; }
+    }
+    const w = G.run[i] ? Math.min(100, G.prog[i] / v[5] * 100) : 0;
+    cards[i].bar.style.width = w + "%";
+  });
+  G.play += dt;
+  if(!G.hist.length || Date.now() - G.hist[G.hist.length-1][0] > 60000){
+    G.hist.push([Date.now(), Math.round(G.lifetime * 100) / 100]);
+    if(G.hist.length > 90) G.hist.splice(0, G.hist.length - 90);
+  }
+  acc += dt; saveAcc += dt;
+  if(acc >= 0.1){ acc = 0; checkQuests(); checkAch(); render(); }
+  if(saveAcc >= 5){ saveAcc = 0; save(); }
+  requestAnimationFrame(frame);
+}
+render();
+requestAnimationFrame(frame);
+addEventListener("visibilitychange", () => {
+  if(document.hidden){ save(); musicStop(); }
+  else { last = performance.now(); if(musicOn) musicStart(); }
+});
+addEventListener("beforeunload", save);
+
+/* ============================ installable app ============================ */
+addEventListener("beforeinstallprompt", e => {
+  e.preventDefault(); window.__plInstall = e;
+  if(page === "reinvest") renderReinvest();
+  $("#dr").classList.add("show");
+});
+addEventListener("appinstalled", () => toast("Penny Loop is installed."));
+if("serviceWorker" in navigator) addEventListener("load", () => {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+});
+</script>
+</body>
+</html>

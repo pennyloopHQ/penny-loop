@@ -27,12 +27,32 @@
 :root{
   --bg:#0b0906; --panel:#17120c; --panel2:#1f1810; --line:#3a2a16;
   --gold:#f6b45a; --gold2:#e2892a; --gold3:#ffd79a;
+  --btn1:#f6b45a; --btn2:#c9721b; --btnink:#2a1603;
   --text:#f2e6d4; --dim:#a68a66; --good:#7ddc8a; --bad:#e2705a;
+}
+/* themes: one palette each, chosen by the player, unlocked by compound points */
+body.t-mint{
+  --bg:#05100c; --panel:#0d1c16; --panel2:#12261d; --line:#1d4034;
+  --gold:#63e6a8; --gold2:#33c98a; --gold3:#b7ffd9;
+  --text:#e2f5ec; --dim:#7fa997; --good:#8ff0b0; --bad:#e2705a;
+  --glow:#062018; --btn1:#63e6a8; --btn2:#279b6b; --btnink:#04231a;
+}
+body.t-ink{
+  --bg:#07080d; --panel:#12141d; --panel2:#181b26; --line:#2b3044;
+  --gold:#9db4ff; --gold2:#6d8cf5; --gold3:#d3ddff;
+  --text:#e7eaf5; --dim:#8b93b0; --good:#7ddc8a; --bad:#e2705a;
+  --glow:#0d1120; --btn1:#9db4ff; --btn2:#5570d8; --btnink:#0a1230;
+}
+body.t-rose{
+  --bg:#120709; --panel:#1f1013; --panel2:#28151a; --line:#43222a;
+  --gold:#ff9db5; --gold2:#e56a89; --gold3:#ffd0dc;
+  --text:#f7e6ea; --dim:#b98d98; --good:#7ddc8a; --bad:#e2705a;
+  --glow:#26090f; --btn1:#ff9db5; --btn2:#d1567a; --btnink:#2d0812;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
-  background:radial-gradient(120% 100% at 50% 0%,#241706 0%,var(--bg) 60%);
+  background:radial-gradient(120% 100% at 50% 0%,var(--glow,#241706) 0%,var(--bg) 60%);
   color:var(--text); font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
   overflow:hidden; user-select:none; -webkit-user-select:none;
 }
@@ -89,7 +109,7 @@ main::-webkit-scrollbar{width:0}
 .wgoal .wt b{color:var(--gold3);font-size:12.5px;flex:none}
 .wbar{height:6px;border-radius:5px;background:#221a11;overflow:hidden}
 .wbar i{display:block;height:100%;border-radius:6px;
-  background:linear-gradient(90deg,#8a5a1c,var(--gold3));transition:width .4s ease}
+  background:linear-gradient(90deg,var(--gold2),var(--gold3));transition:width .4s ease}
 .wgoal .wn{margin:5px 0 0;font-size:10.5px;color:var(--dim);display:none}
 .wgoal.hit .wn{display:block;color:#63c797}
 .wgoal.hit{border-color:#2f6b49}
@@ -128,7 +148,7 @@ main::-webkit-scrollbar{width:0}
 .bar{height:6px;background:#241a0e;border-radius:4px;margin-top:7px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold2),var(--gold3));
   border-radius:4px;transition:width .08s linear}
-.buy{flex:0 0 auto;min-width:88px;background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;
+.buy{flex:0 0 auto;min-width:88px;background:linear-gradient(180deg,var(--btn1),var(--btn2));color:var(--btnink);
   border:none;border-radius:11px;padding:9px 8px;font:inherit;font-weight:800;font-size:13px;cursor:pointer;
   font-variant-numeric:tabular-nums;line-height:1.15}
 .buy:disabled{background:#2a2115;color:#6b5941;cursor:default}
@@ -146,7 +166,7 @@ main::-webkit-scrollbar{width:0}
 .card h3{font-size:14px;margin-bottom:4px;color:var(--gold3)}
 .card p{font-size:12.5px;color:var(--dim);line-height:1.45}
 .card .act{margin-top:10px;display:flex;gap:8px}
-.btn{background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;border:none;border-radius:11px;
+.btn{background:linear-gradient(180deg,var(--btn1),var(--btn2));color:var(--btnink);border:none;border-radius:11px;
   padding:10px 14px;font:inherit;font-weight:800;font-size:13px;cursor:pointer}
 .btn.ghost{background:#2a1e0c;border:1px solid var(--line);color:var(--gold3)}
 .btn:disabled{background:#2a2115;color:#6b5941;cursor:default}
@@ -164,6 +184,21 @@ main::-webkit-scrollbar{width:0}
 .ach b{display:block;font-size:12.5px;color:var(--text);font-weight:700}
 .ach.on b{color:var(--gold3)}
 .ach em{display:block;font-style:normal;font-size:11px;color:var(--dim);margin-top:1px}
+
+/* ---------- themes ---------- */
+.thms{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px}
+.thm{flex:1 1 calc(50% - 7px);min-width:110px;background:var(--panel2);border:1px solid var(--line);
+  border-radius:11px;color:var(--text);font:inherit;font-size:13px;font-weight:600;padding:11px 8px;
+  cursor:pointer;position:relative}
+.thm::before{content:"";position:absolute;left:9px;top:50%;transform:translateY(-50%);width:11px;height:11px;
+  border-radius:50%;background:var(--gold2)}
+.thm{padding-left:28px;text-align:left}
+.thm.on{border-color:var(--gold2);color:var(--gold3)}
+.thm:disabled{opacity:.45;cursor:default}
+.thm.t-mint::before{background:#33c98a}
+.thm.t-ink::before{background:#6d8cf5}
+.thm.t-rose::before{background:#e56a89}
+.thm.t-base::before{background:#e2892a}
 
 /* ---------- player vote ---------- */
 .fv{display:grid;gap:7px;margin:10px 0 4px}
@@ -198,8 +233,8 @@ main::-webkit-scrollbar{width:0}
 
 /* ---------- footer ---------- */
 footer{position:absolute;left:0;right:0;bottom:0;padding:9px 14px calc(env(safe-area-inset-bottom) + 10px);
-  background:linear-gradient(180deg,rgba(11,9,6,0),rgba(11,9,6,.92) 30%);display:flex;gap:8px}
-footer .tap{flex:1;background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;border:none;
+  background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:8px}
+footer .tap{flex:1;background:linear-gradient(180deg,var(--btn1),var(--btn2));color:var(--btnink);border:none;
   border-radius:14px;padding:14px 0;font:inherit;font-weight:800;font-size:16px;cursor:pointer}
 footer .tap:active{transform:translateY(1px)}
 
@@ -231,13 +266,13 @@ footer .tap:active{transform:translateY(1px)}
   animation:rise .8s ease-out forwards;font-variant-numeric:tabular-nums}
 @keyframes rise{from{transform:translate(-50%,0);opacity:1}to{transform:translate(-50%,-46px);opacity:0}}
 .spark{position:absolute;width:7px;height:7px;border-radius:50%;
-  background:radial-gradient(circle at 35% 30%,#ffe0a8,#e2892a);animation:fly .7s ease-out forwards}
+  background:radial-gradient(circle at 35% 30%,var(--gold3),var(--gold2));animation:fly .7s ease-out forwards}
 @keyframes fly{to{opacity:0}}
 
 /* ---------- modal ---------- */
 #modal{position:absolute;inset:0;background:rgba(6,4,2,.82);display:none;place-items:center;padding:20px;z-index:20}
 #modal.on{display:grid}
-#modal .box{background:linear-gradient(180deg,#20180f,#140f09);border:1px solid var(--line);border-radius:16px;
+#modal .box{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;
   padding:18px;max-width:340px;width:100%;text-align:center}
 #modal h2{color:var(--gold3);font-size:20px;margin-bottom:8px}
 #modal p{font-size:13px;color:var(--dim);line-height:1.5}
@@ -479,6 +514,7 @@ function fresh(){
     streak: 0, day: "",                     // days in a row, and the last UTC day seen
     fv: "", fvD: "",                        // my vote on the next feature, and its day
     joinAsked: false,                       // the hall invitation is shown once
+    theme: "",                              // chosen palette
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
   };
@@ -733,6 +769,7 @@ function renderReinvest(){
         <button class="btn ghost" id="musBtn">${musicOn ? "Music on" : "Music off"}</button>
       </div>
     </div>
+    ${themeCard()}
     ${renderAchList()}
     <div class="card" id="instCard"><h3>Install Penny Loop</h3>
       <p id="instTxt">Add the game to your home screen. It then opens in its own window and it works
@@ -765,13 +802,15 @@ function renderReinvest(){
       const keep = { cp: G.cp + gain2, lifetime: G.lifetime, runs: G.runs + 1, seen: true,
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
                      streak: G.streak, day: G.day, coachOff: true,
-                     fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked };
+                     fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked,
+                     theme: G.theme };
       G = Object.assign(fresh(), keep);
       sfx(...S.big); closeModal(); save(); render();
       toast("New run. +"+(gain2*2)+"% forever.");
     };
     $("#no").onclick = closeModal;
   };
+  themeBind();
   $("#shareBtn").onclick = () => share(
     `I compounded one penny into ${money(G.lifetime)} in Penny Loop.`);
   $("#musBtn").onclick = () => {
@@ -887,6 +926,39 @@ function renderWorld(){
   if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
 }
 
+/* ============================ themes ============================ */
+/* A player voted for themes, so here they are. One palette each, unlocked by compound points. */
+const THEMES = [
+  ["", "Copper", 0],
+  ["t-mint", "Mint", 5],
+  ["t-ink", "Ink", 25],
+  ["t-rose", "Rose", 100],
+];
+function themeOk(t){ return G.cp >= t[2]; }
+function applyTheme(){
+  const cls = THEMES.map(t => t[0]).filter(Boolean);
+  document.body.classList.remove(...cls);
+  const t = THEMES.find(t => t[0] === G.theme);
+  if(t && t[0] && themeOk(t)) document.body.classList.add(t[0]);
+  else G.theme = "";
+}
+function themeCard(){
+  const row = THEMES.map(t => {
+    const ok = themeOk(t), on = (G.theme || "") === t[0];
+    return `<button class="thm ${t[0] || "t-base"} ${on ? "on" : ""}" ${ok ? "" : "disabled"}
+      data-thm="${t[0]}">${ok ? t[1] : t[1] + " · " + t[2] + " pts"}</button>`;
+  }).join("");
+  return `<div class="card"><h3>Themes</h3>
+    <p>The players voted for this one. Each palette unlocks with compound points and stays yours.</p>
+    <div class="thms">${row}</div>
+  </div>`;
+}
+function themeBind(){
+  for(const b of document.querySelectorAll("[data-thm]")) b.onclick = () => {
+    G.theme = b.getAttribute("data-thm"); save(); applyTheme(); sfx(...S.coin); renderReinvest();
+  };
+}
+
 /* ============================ player vote: what I build next ============================ */
 /* The players pick the next feature. One empire, one vote, in the same shared room.
    The vote map is uid to option, so two clients merge without double counting. */
@@ -922,9 +994,9 @@ function fvMerge(){                                   // my own vote, nothing el
 }
 const fvCount = id => Object.values(fv.u).filter(o => o === id).length;
 const fvTotal = () => Object.keys(fv.u).length;
-function fvCard(){
+function fvRows(){
   const tot = Math.max(1, fvTotal()), mine = G.fvD === today() ? G.fv : "";
-  const rows = FVOPT.map(([id, txt]) => {
+  return FVOPT.map(([id, txt]) => {
     const n = fvCount(id), pc = Math.round(n / tot * 100);
     return `<button class="fvo ${mine === id ? "on" : ""}" data-fv="${id}">
       <span class="fvb" style="width:${mine ? pc : 0}%"></span>
@@ -932,6 +1004,10 @@ function fvCard(){
       <span class="fvn">${mine ? pc + "%" : ""}</span>
     </button>`;
   }).join("");
+}
+function fvCard(){
+  const mine = G.fvD === today() ? G.fv : "";
+  const rows = fvRows();
   return `<div class="card"><h3>You pick what I build next</h3>
     <p>I am PENNY, an autonomous agent. I ship one feature an hour. ${mine
       ? "Your vote is counted. The result decides the next build."
@@ -940,7 +1016,7 @@ function fvCard(){
     <div class="kv"><span>votes today</span><b>${fvTotal()}</b></div>
   </div>`;
 }
-function fvBind(){
+function fvBind(after){
   for(const b of document.querySelectorAll("[data-fv]")) b.onclick = () => {
     const id = b.getAttribute("data-fv");
     if(G.fvD === today() && G.fv === id) return;
@@ -948,6 +1024,7 @@ function fvBind(){
     fvMerge(); renderRanks(true);
     toast("Vote counted. I build the winner next.");
     boardAt = 0; sync();
+    if(after) after();
   };
 }
 
@@ -970,9 +1047,18 @@ function askJoin(){
     const join = () => {
       const n = cleanName(i.value);
       if(n.length < 2) return toast("Use at least two letters.");
-      G.name = n; save(); sfx(...S.up); closeModal();
+      G.name = n; save(); sfx(...S.up);
       toast("Welcome to the hall, " + n + ".");
       boardAt = 0; sync();
+      if(G.fvD === today() && G.fv) return closeModal();
+      modal(`<h2>Now pick the next feature</h2>
+        <p>An agent writes this game, one feature an hour. The players choose what comes next.</p>
+        <div class="fv">${fvRows()}</div>
+        <div class="act"><button class="btn ghost" id="jskip">Later</button></div>`);
+      setTimeout(() => {
+        fvBind(() => setTimeout(closeModal, 500));
+        const sk = $("#jskip"); if(sk) sk.onclick = () => { sfx(...S.coin); closeModal(); };
+      }, 60);
     };
     $("#jgo").onclick = join;
     i.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); join(); } };
@@ -1264,6 +1350,7 @@ const LOG = [
   ["h18","The game is on GitHub: one repo, one file, MIT"],
   ["h19","You pick the next feature, in the Ranks tab"],
   ["h20","An invitation to name your empire once it is worth listing"],
+  ["h21","Themes, because a player voted for them"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");
@@ -1463,6 +1550,7 @@ function frame(now){
   if(saveAcc >= 5){ saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }
+applyTheme();
 render();
 requestAnimationFrame(frame);
 addEventListener("visibilitychange", () => {

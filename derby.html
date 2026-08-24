@@ -48,6 +48,7 @@ main{flex:1 1 auto;display:grid;grid-template-columns:1fr 300px;gap:10px;min-hei
 .bets button{flex:1 1 0;min-width:88px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
   color:var(--text);font:inherit;font-size:12.5px;padding:9px 6px;cursor:pointer;text-align:center}
 .bets button.on{border-color:var(--gold2);color:var(--gold3)}
+.bets button .pl{display:block;color:var(--dim);font-size:10.5px;min-height:12px}
 .bets button:disabled{opacity:.45;cursor:default}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .btn{background:linear-gradient(180deg,#f6b45a,#c9721b);color:#2a1603;border:none;border-radius:10px;
@@ -81,8 +82,25 @@ footer a{color:var(--gold)}
   color:var(--gold3);padding:9px 15px;border-radius:11px;font-size:13px;opacity:0;transition:opacity .25s;pointer-events:none}
 #toast.on{opacity:1}
 @media(max-width:820px){
-  main{grid-template-columns:1fr;grid-template-rows:1fr 210px}
-  .lane{height:30px;max-height:40px}
+  /* On a phone the page scrolls. Every part keeps its own height, nothing overlaps. */
+  html,body{height:auto;overflow:auto}
+  body{overflow-x:hidden}
+  #app{height:auto;min-height:100%;padding:9px;gap:8px}
+  header{gap:6px}
+  h1{font-size:17px}
+  header .sub{font-size:12px}
+  header .sub:last-child{margin-left:auto}
+  main{grid-template-columns:1fr;grid-template-rows:auto auto;min-height:0}
+  .card{padding:10px}
+  #track{flex:0 0 auto;gap:5px}
+  .lane{flex:0 0 auto;height:32px;max-height:32px}
+  .lane .nm{width:64px;font-size:11px}
+  .bets{gap:5px}
+  .bets button{flex:1 1 30%;min-width:0;font-size:11.5px;padding:7px 3px}
+  #chat{height:150px;flex:0 0 auto}
+  .row{gap:6px}
+  footer{font-size:10.5px}
+  footer span:first-child{display:none}
 }
 </style>
 </head>
@@ -195,6 +213,8 @@ function posOf(race, h, t){
 /* ---------- the shared room: chat, the salt, the horse names, the head count ---------- */
 const ROOM = "pennyderby-1";
 let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1, hist = [];
+/* the money the room has on each horse in the race being bet on */
+let pool = { rid: -1, tot: [] };
 function send(key, value){ if(sock && sock.readyState === 1)
   try{ sock.send(JSON.stringify({ type:"set", key, value })); }catch(e){} }
 function connect(){
@@ -208,12 +228,13 @@ function connect(){
     let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
     if(m.type === "welcome"){
       const st = m.state || {};
-      takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist);
+      takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist); takePool(st.pool);
     } else if(m.type === "set"){
       if(m.key === "chat") takeChat(m.value);
       else if(m.key === "names") takeNames(m.value);
       else if(m.key === "salt") takeSalt(m.value);
       else if(m.key === "hist") takeHist(m.value);
+      else if(m.key === "pool") takePool(m.value);
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count;
       $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
   };
@@ -229,6 +250,23 @@ function takeChat(v){
     seen.add(id); chat.push({ id, n, t, at: Number(raw.at) || Date.now() });
   }
   chat.sort((a,b) => a.at - b.at); chat = chat.slice(-60); paintChat();
+}
+/* The pool is the room's money on each horse. Merge by the larger number per horse, so a client
+   that missed a message cannot erase a bet somebody else already placed. */
+function takePool(v){
+  if(!v || typeof v !== "object") return;
+  const rid = Number(v.rid), tot = Array.isArray(v.tot) ? v.tot : null;
+  if(!isFinite(rid) || !tot || rid < pool.rid) return;
+  if(rid !== pool.rid) pool = { rid, tot: Array(HORSES).fill(0) };
+  for(let i = 0; i < HORSES; i++){
+    const n = Number(tot[i]); if(n > 0 && n < 1e12) pool.tot[i] = Math.max(pool.tot[i] || 0, Math.floor(n));
+  }
+  paintBets();
+}
+function addPool(rid, h, amt){
+  if(rid !== pool.rid) pool = { rid, tot: Array(HORSES).fill(0) };
+  pool.tot[h] = (pool.tot[h] || 0) + amt;
+  send("pool", pool); paintBets();
 }
 /* One row per race, keyed by race id, so the same result never counts twice. */
 function takeHist(v){
@@ -254,7 +292,10 @@ function paintTally(){
   const rank = n.map((v,i) => [i,v]).sort((a,b) => b[1] - a[1]);
   $("#tally").innerHTML = rank.map(([i,v]) =>
     `<div class="tr"><span>${EMO[i]} ${horseName(i)}${AGENTS[i] ? ' <em>' + AGENTS[i] + '</em>' : ''}</span><b>${v}</b></div>`).join("");
-  $("#recent").textContent = today.slice(-8).map(h => horseName(h.w)).join(" \u00b7 ") || "no races yet today";
+  $("#recent").innerHTML = today.length
+    ? "last results " + today.slice(-14).map(h =>
+        `<span title="race #${h.rid % 100000}: ${horseName(h.w)}">${EMO[h.w]}</span>`).join("")
+    : "no races yet today";
 }
 function takeNames(v){
   if(!v || typeof v !== "object") return;
@@ -305,7 +346,8 @@ function paintBets(){
   const dis = phaseOf().phase !== "bet" || !!S.bet;
   $("#bets").innerHTML = race ? race.hs.map((h,i) =>
     `<button data-h="${i}" class="${betH === i ? "on" : ""}" ${dis ? "disabled" : ""}>
-      ${EMO[i]} ${horseName(i)}<br><small style="color:var(--gold3)">${oddsFor(race.rid)[i].toFixed(1)}x</small></button>`).join("") : "";
+      ${EMO[i]} ${horseName(i)}<br><small style="color:var(--gold3)">${oddsFor(race.rid)[i].toFixed(1)}x</small>
+      <small class="pl">${pool.rid === race.rid && pool.tot[i] ? "room " + fmt(pool.tot[i]) : ""}</small></button>`).join("") : "";
   for(const b of $("#bets").querySelectorAll("[data-h]")) b.onclick = () => { betH = +b.dataset.h; paintBets(); };
   $("#amts").innerHTML = AMTS.map(a =>
     `<button data-a="${a}" class="${betAmt === a ? "on" : ""}">${a === "all" ? "all in" : a}</button>`).join("");
@@ -438,6 +480,7 @@ $("#place").onclick = () => {
   if(amt < 1) return toast("Watch a while to earn points.");
   S.pts -= amt; S.bet = { rid: p.rid, h: betH, amt }; save(); paint();
   toast(fmt(amt) + " on " + horseName(betH));
+  addPool(p.rid, betH, amt);
   bcast(`backs ${EMO[betH]} ${horseName(betH)} for ${fmt(amt)} at ${oddsFor(p.rid)[betH].toFixed(1)}x`);
 };
 function sendChat(){

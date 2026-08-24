@@ -478,6 +478,7 @@ function fresh(){
     up: {}, ach: {}, q: 0, taps: 0, hist: [], play: 0, t: Date.now(), seen: false,
     streak: 0, day: "",                     // days in a row, and the last UTC day seen
     fv: "", fvD: "",                        // my vote on the next feature, and its day
+    joinAsked: false,                       // the hall invitation is shown once
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
   };
@@ -764,7 +765,7 @@ function renderReinvest(){
       const keep = { cp: G.cp + gain2, lifetime: G.lifetime, runs: G.runs + 1, seen: true,
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
                      streak: G.streak, day: G.day, coachOff: true,
-                     fv: G.fv, fvD: G.fvD };
+                     fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked };
       G = Object.assign(fresh(), keep);
       sfx(...S.big); closeModal(); save(); render();
       toast("New run. +"+(gain2*2)+"% forever.");
@@ -950,6 +951,36 @@ function fvBind(){
   };
 }
 
+/* Most players never open the Ranks tab, so the hall stays empty while the world
+   goal counts them. Ask once, when the empire is worth listing. */
+function askJoin(){
+  if(G.name || G.joinAsked || G.lifetime < 1e6 || !G.coachOff) return;
+  if($("#modal").classList.contains("on")) return;
+  G.joinAsked = true; save();
+  modal(`<h2>Name your empire</h2>
+    <p>Your net worth is ${money(G.lifetime)}. That is enough for the hall of empires, where the
+    top 25 players of the day are listed. Your name shows there and nowhere else.</p>
+    <div class="nameRow">
+      <input id="jn" maxlength="16" placeholder="Your empire name" autocomplete="off" spellcheck="false">
+      <button class="btn" id="jgo">Join</button>
+    </div>
+    <div class="act"><button class="btn ghost" id="jno">Not now</button></div>`);
+  setTimeout(() => {
+    const i = $("#jn"); if(!i) return;
+    const join = () => {
+      const n = cleanName(i.value);
+      if(n.length < 2) return toast("Use at least two letters.");
+      G.name = n; save(); sfx(...S.up); closeModal();
+      toast("Welcome to the hall, " + n + ".");
+      boardAt = 0; sync();
+    };
+    $("#jgo").onclick = join;
+    i.onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); join(); } };
+    const no = $("#jno"); if(no) no.onclick = () => { sfx(...S.coin); closeModal(); };
+    i.focus();
+  }, 60);
+}
+
 /* ============================ hall of empires ============================ */
 /* One shared room on this origin holds the top 25 empires. A client reads the
    room state, merges its own entry, writes it back, then closes the socket, so
@@ -1065,6 +1096,7 @@ function renderRanks(force){
       The board updates about once a minute. Numbers that no honest run can reach are dropped.</p>
       <p>Every player also adds their net worth to one world goal each day. Reach it together and
       every player earns +25% for the rest of the day.</p>
+      <div class="kv"><span>empires playing today</span><b>${Object.keys(world.p).length + (world.p[G.uid] ? 0 : 1)}</b></div>
       ${G.name ? `
         <div class="kv"><span>your empire</span><b>${G.name}</b></div>
         <div class="kv"><span>your net worth</span><b id="lbNW">${money(G.lifetime)}</b></div>
@@ -1231,6 +1263,7 @@ const LOG = [
   ["h17","The world goal opens to other games, with a public spec"],
   ["h18","The game is on GitHub: one repo, one file, MIT"],
   ["h19","You pick the next feature, in the Ranks tab"],
+  ["h20","An invitation to name your empire once it is worth listing"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");
@@ -1426,7 +1459,7 @@ function frame(now){
     if(G.hist.length > 90) G.hist.splice(0, G.hist.length - 90);
   }
   acc += dt; saveAcc += dt;
-  if(acc >= 0.1){ acc = 0; checkQuests(); checkAch(); render(); }
+  if(acc >= 0.1){ acc = 0; checkQuests(); checkAch(); render(); askJoin(); }
   if(saveAcc >= 5){ saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }

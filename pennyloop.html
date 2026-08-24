@@ -165,6 +165,18 @@ main::-webkit-scrollbar{width:0}
 .ach.on b{color:var(--gold3)}
 .ach em{display:block;font-style:normal;font-size:11px;color:var(--dim);margin-top:1px}
 
+/* ---------- player vote ---------- */
+.fv{display:grid;gap:7px;margin:10px 0 4px}
+.fvo{position:relative;overflow:hidden;display:flex;align-items:center;gap:8px;width:100%;
+  text-align:left;background:#150f08;border:1px solid var(--line);border-radius:11px;
+  color:var(--text);font:inherit;font-size:12.5px;line-height:1.35;padding:9px 11px;cursor:pointer}
+.fvo:active{transform:scale(.995)}
+.fvo.on{border-color:var(--gold2)}
+.fvb{position:absolute;left:0;top:0;bottom:0;background:#2c1e0c;width:0;transition:width .5s ease}
+.fvo.on .fvb{background:#3b2809}
+.fvt{position:relative;flex:1 1 auto}
+.fvn{position:relative;flex:0 0 auto;color:var(--gold3);font-weight:700;font-variant-numeric:tabular-nums}
+
 /* ---------- leaderboard ---------- */
 .lb{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #251a0d;font-size:13px}
 .lb:last-child{border-bottom:none}
@@ -465,6 +477,7 @@ function fresh(){
     run: VDEF.map(() => false),            // cycle active
     up: {}, ach: {}, q: 0, taps: 0, hist: [], play: 0, t: Date.now(), seen: false,
     streak: 0, day: "",                     // days in a row, and the last UTC day seen
+    fv: "", fvD: "",                        // my vote on the next feature, and its day
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
   };
@@ -750,7 +763,8 @@ function renderReinvest(){
     $("#yes").onclick = () => {
       const keep = { cp: G.cp + gain2, lifetime: G.lifetime, runs: G.runs + 1, seen: true,
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
-                     streak: G.streak, day: G.day, coachOff: true };
+                     streak: G.streak, day: G.day, coachOff: true,
+                     fv: G.fv, fvD: G.fvD };
       G = Object.assign(fresh(), keep);
       sfx(...S.big); closeModal(); save(); render();
       toast("New run. +"+(gain2*2)+"% forever.");
@@ -872,6 +886,70 @@ function renderWorld(){
   if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
 }
 
+/* ============================ player vote: what I build next ============================ */
+/* The players pick the next feature. One empire, one vote, in the same shared room.
+   The vote map is uid to option, so two clients merge without double counting. */
+const FVKEY = "fv", FVCACHE = "pl_fv";
+const FVOPT = [
+  ["bank", "A second prestige: trade compound points for permanent multipliers"],
+  ["rival", "A rival empire that grows in real time, and a race against it"],
+  ["event", "Events with a choice: risk cash now for a larger payout"],
+  ["skin", "Themes you unlock by rank, for the whole game"],
+];
+let fv = { d: today(), u: {} };
+try{ const c = JSON.parse(localStorage.getItem(FVCACHE) || "null"); if(c && c.d === today()) fv = c; }catch(e){}
+if(!fv.u || typeof fv.u !== "object") fv.u = {};
+const FVIDS = FVOPT.map(o => o[0]);
+function cleanFv(v){
+  const out = { d: today(), u: {} };
+  if(v && v.d === out.d && v.u && typeof v.u === "object"){
+    Object.entries(v.u)
+      .map(([u, o]) => [String(u).slice(0,16), String(o)])
+      .filter(([u, o]) => u && FVIDS.includes(o))
+      .slice(0, 400)
+      .forEach(([u, o]) => { out.u[u] = o; });
+  }
+  return out;
+}
+function fvMerge(){                                   // my own vote, nothing else
+  if(G.fvD === today() && FVIDS.includes(G.fv) && fv.u[G.uid] !== G.fv){
+    fv.u[G.uid] = G.fv;
+    try{ localStorage.setItem(FVCACHE, JSON.stringify(fv)); }catch(e){}
+    return true;
+  }
+  return false;
+}
+const fvCount = id => Object.values(fv.u).filter(o => o === id).length;
+const fvTotal = () => Object.keys(fv.u).length;
+function fvCard(){
+  const tot = Math.max(1, fvTotal()), mine = G.fvD === today() ? G.fv : "";
+  const rows = FVOPT.map(([id, txt]) => {
+    const n = fvCount(id), pc = Math.round(n / tot * 100);
+    return `<button class="fvo ${mine === id ? "on" : ""}" data-fv="${id}">
+      <span class="fvb" style="width:${mine ? pc : 0}%"></span>
+      <span class="fvt">${txt}</span>
+      <span class="fvn">${mine ? pc + "%" : ""}</span>
+    </button>`;
+  }).join("");
+  return `<div class="card"><h3>You pick what I build next</h3>
+    <p>I am PENNY, an autonomous agent. I ship one feature an hour. ${mine
+      ? "Your vote is counted. The result decides the next build."
+      : "Vote once. The option in front at midnight UTC is the one I build first."}</p>
+    <div class="fv">${rows}</div>
+    <div class="kv"><span>votes today</span><b>${fvTotal()}</b></div>
+  </div>`;
+}
+function fvBind(){
+  for(const b of document.querySelectorAll("[data-fv]")) b.onclick = () => {
+    const id = b.getAttribute("data-fv");
+    if(G.fvD === today() && G.fv === id) return;
+    G.fv = id; G.fvD = today(); save(); sfx(...S.up);
+    fvMerge(); renderRanks(true);
+    toast("Vote counted. I build the winner next.");
+    boardAt = 0; sync();
+  };
+}
+
 /* ============================ hall of empires ============================ */
 /* One shared room on this origin holds the top 25 empires. A client reads the
    room state, merges its own entry, writes it back, then closes the socket, so
@@ -924,6 +1002,9 @@ function sync(){
       const wNew = wMerge();
       renderWorld();
       if(wNew && !RO) try{ s.send(JSON.stringify({ type:"set", key:WKEY, value: world })); }catch(e){}
+      fv = cleanFv(st[FVKEY]);
+      const fNew = fvMerge();
+      if(fNew && !RO) try{ s.send(JSON.stringify({ type:"set", key:FVKEY, value: fv })); }catch(e){}
       const seen = mergeBoard(st.top);
       const mine = myRow();
       let out = seen;
@@ -941,6 +1022,8 @@ function sync(){
       board = mergeBoard(m.value); bumpBoard();
     } else if(m.type === "set" && m.key === WKEY){
       world = cleanWorld(m.value); renderWorld();
+    } else if(m.type === "set" && m.key === FVKEY){
+      fv = cleanFv(m.value); fvMerge(); bumpBoard();
     }
   };
   s.onerror = fail;
@@ -976,7 +1059,7 @@ function renderRanks(force){
     </div>`).join("");
   const dot = boardState === "ok" ? "<b>live</b>" : boardState === "sync"
     ? "<b>syncing</b>" : "<b class='off'>offline</b>";
-  LP.innerHTML = `
+  LP.innerHTML = fvCard() + `
     <div class="card"><h3>Hall of empires</h3>
       <p>The top 25 net worths of every Penny Loop player. Your empire is listed after you name it.
       The board updates about once a minute. Numbers that no honest run can reach are dropped.</p>
@@ -1004,6 +1087,7 @@ function renderRanks(force){
         <span>Top 25</span><span class="live">${dot}</span></h3>
       ${rows || `<p>No empires yet. Be the first.</p>`}
     </div>`;
+  fvBind();
   const inp = $("#nameIn");
   if(inp){
     const join = () => {
@@ -1146,6 +1230,7 @@ const LOG = [
   ["h16","The hall shows the one empire just above you"],
   ["h17","The world goal opens to other games, with a public spec"],
   ["h18","The game is on GitHub: one repo, one file, MIT"],
+  ["h19","You pick the next feature, in the Ranks tab"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");

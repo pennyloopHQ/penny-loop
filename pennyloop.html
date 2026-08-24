@@ -886,14 +886,14 @@ function cleanWorld(v){
   if(v && v.d === out.d && v.g && typeof v.g === "object"){
     Object.entries(v.g)
       .map(([n, w]) => [cleanName(n), Number(w)])
-      .filter(([n, w]) => n && isFinite(w) && w > 0 && w < 1e16)
+      .filter(([n, w]) => n && isFinite(w) && w > 0 && w < 1e15)
       .sort((a, b) => b[1] - a[1]).slice(0, 8)
       .forEach(([n, w]) => { out.g[n] = Math.round(w * 100) / 100; });
   }
   if(v && v.d === out.d && v.p && typeof v.p === "object"){
     Object.entries(v.p)
       .map(([u, w]) => [String(u).slice(0,16), Number(w)])
-      .filter(([u, w]) => u && isFinite(w) && w > 0 && w < 1e16)
+      .filter(([u, w]) => u && isFinite(w) && w > 0 && w < 1e14)
       .sort((a, b) => b[1] - a[1]).slice(0, 200)
       .forEach(([u, w]) => { out.p[u] = Math.round(w * 100) / 100; });
   }
@@ -902,10 +902,10 @@ function cleanWorld(v){
 function wMerge(){                                    // my own row, best value only
   const w = Math.round(G.lifetime * 100) / 100;
   let changed = false;
-  if(w > 0 && w < 1e16 && (world.p[G.uid] || 0) < w){ world.p[G.uid] = w; changed = true; }
+  if(w > 0 && w < 1e14 && (world.p[G.uid] || 0) < w){ world.p[G.uid] = w; changed = true; }
   /* publish one number for the whole game, so another game can read it in one field */
   const mine = Math.round(pTotal() * 100) / 100;
-  if(mine > 0 && mine < 1e16 && (world.g[MYGAME] || 0) < mine){ world.g[MYGAME] = mine; changed = true; }
+  if(mine > 0 && mine < 1e15 && (world.g[MYGAME] || 0) < mine){ world.g[MYGAME] = mine; changed = true; }
   if(changed) try{ localStorage.setItem(WCACHE, JSON.stringify(world)); }catch(e){}
   return changed;
 }
@@ -1076,14 +1076,19 @@ let board = [], boardAt = 0, boardState = "idle", boardV = 0, sock = null;
 try{ const c = JSON.parse(localStorage.getItem(BOARDK) || "[]"); if(Array.isArray(c)) board = c; }catch(e){}
 
 function cleanName(s){ return String(s || "").replace(/[<>\n\r\t]/g,"").trim().slice(0,16); }
-/* A net worth this high needs compound points to back it. Anybody can write to the
-   room, so the board drops numbers that no honest run can reach. */
-const plausible = (w, c) => w <= 1e12 * Math.pow(4, Math.min(c, 80));
+/* Anybody can write to this room, so every number is checked before it is shown.
+   Compound points come only from lifetime earnings: c points need about (c/12)^2 million
+   in the bank. A thousand times that much is a generous ceiling for one empire, and no
+   honest run of any length reaches a quintillion. Two players wrote 1e29 and 4e33 on
+   2026-08-24; this check removes both and keeps every real score. */
+const CPMAX = 100000;
+const lifeForCp = c => Math.pow(c / 12, 2) * 1e6;
+const plausible = (w, c) => w <= 1e18 && w <= lifeForCp(c) * 1000 + 1e12;
 function cleanEntry(e){
   if(!e || typeof e !== "object") return null;
   const u = String(e.u || "").slice(0,16), n = cleanName(e.n), w = Number(e.w);
   if(!u || !n || !isFinite(w) || w <= 0) return null;
-  const c = Math.max(0, Math.min(500, Number(e.c) | 0));
+  const c = Math.max(0, Math.min(CPMAX, Number(e.c) | 0));
   if(!plausible(w, c)) return null;
   return { u, n, w: Math.round(w*100)/100, c, t: Number(e.t) || 0 };
 }
@@ -1351,6 +1356,7 @@ const LOG = [
   ["h19","You pick the next feature, in the Ranks tab"],
   ["h20","An invitation to name your empire once it is worth listing"],
   ["h21","Themes, because a player voted for them"],
+  ["h22","A stronger honesty check on the hall and the world goal"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");

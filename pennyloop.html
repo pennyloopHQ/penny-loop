@@ -515,6 +515,8 @@ function fresh(){
     fv: "", fvD: "",                        // my vote on the next feature, and its day
     joinAsked: false,                       // the hall invitation is shown once
     theme: "",                              // chosen palette
+    pk: { loop: 0, hands: 0, night: 0 },    // the vault: permanent perks bought with points
+    spent: 0,                               // points locked in the vault
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
   };
@@ -537,6 +539,9 @@ if(typeof G.play !== "number") G.play = 0;
   }
 })();
 if(!G.ach || typeof G.ach !== "object") G.ach = {};
+if(!G.pk || typeof G.pk !== "object") G.pk = { loop: 0, hands: 0, night: 0 };
+for(const k of ["loop","hands","night"]) if(!(G.pk[k] >= 0)) G.pk[k] = 0;
+if(!(G.spent >= 0)) G.spent = 0;
 function save(){ G.t = Date.now(); try{ localStorage.setItem(SAVE, JSON.stringify(G)); }catch(e){} }
 
 /* ---- daily market mood: same for everyone on the same UTC day ---- */
@@ -553,6 +558,16 @@ function mood(){
 const MOOD = mood();
 
 /* ============================ derived ============================ */
+/* The vault is a second prestige. A point you lock stops paying +2% and pays a perk instead. */
+const PK = [
+  ["loop",  "Wider loop",  "+12% on all venture income", l => Math.round(4 * Math.pow(1.8, l)), 5],
+  ["hands", "Faster hands","+30% on every shift you work by hand", l => Math.round(3 * Math.pow(1.8, l)), 5],
+  ["night", "Night shift", "+2 hours of offline earnings", l => Math.round(5 * Math.pow(2, l)), 6],
+];
+const pkDef = k => PK.find(p => p[0] === k);
+const pkMax = k => { const d = pkDef(k); return d ? (G.pk[k] || 0) >= d[4] : true; };
+const pkCost = k => { const d = pkDef(k); return d && !pkMax(k) ? d[3](G.pk[k] || 0) : Infinity; };
+const cpFree = () => Math.max(0, (G.cp || 0) - (G.spent || 0));
 const achCount = () => { let k = 0; for(const a of ACH) if(G.ach[a[0]]) k++; return k; };
 const achMul = () => 1 + achCount() * 0.01;
 /* a daily streak pays only for today: 5% for each day in a row, up to ten days */
@@ -561,14 +576,14 @@ const mulOf = i => {
   let m = 1;
   for(const u of UPG) if(G.up[u.id] && (u.kind==="g" || (u.kind==="v" && u.v===i))) m *= u.x;
   if(i === MOOD.v) m *= MOOD.x;
-  return m * (1 + G.cp * 0.02) * achMul() * wMul() * streakMul();
+  return m * (1 + cpFree() * 0.02) * (1 + 0.12 * G.pk.loop) * achMul() * wMul() * streakMul();
 };
 const tapMul = () => {
   let m = 1;
   for(const u of UPG) if(G.up[u.id] && u.kind==="t") m *= u.x;
-  return m * (1 + G.cp * 0.02) * achMul() * wMul() * streakMul();
+  return m * (1 + cpFree() * 0.02) * (1 + 0.30 * G.pk.hands) * achMul() * wMul() * streakMul();
 };
-const offHours = () => 4 + (G.up.o1 ? 4 : 0) + (G.up.o2 ? 4 : 0) + (G.up.o3 ? 12 : 0);
+const offHours = () => 4 + (G.up.o1 ? 4 : 0) + (G.up.o2 ? 4 : 0) + (G.up.o3 ? 12 : 0) + 2 * G.pk.night;
 const cycleRev = i => VDEF[i][4] * G.n[i] * mulOf(i);
 const costOf = i => VDEF[i][2] * Math.pow(VDEF[i][3], G.n[i]);
 const mgrCost = i => VDEF[i][2] * 90;
@@ -746,7 +761,8 @@ function renderReinvest(){
     <div class="card"><h3>Reinvest</h3>
       <p>Reinvest sells the whole empire and starts again from one penny. You keep your compound points. Each point adds 2 percent to all income, forever.</p>
       <div class="kv"><span>compound points</span><b>${G.cp}</b></div>
-      <div class="kv"><span>permanent bonus</span><b>+${(G.cp*2)}% compound, +${achCount()}% achievements</b></div>
+      <div class="kv"><span>points free to spend</span><b>${cpFree()} of ${G.cp}</b></div>
+      <div class="kv"><span>permanent bonus</span><b>+${cpFree()*2}% compound, +${achCount()}% achievements</b></div>
       <div class="kv"><span>lifetime earnings</span><b>${money(G.lifetime)}</b></div>
       <div class="kv"><span>points waiting</span><b>${gain}</b></div>
       <div class="kv"><span>next point at</span><b>${money(nextAt)} lifetime</b></div>
@@ -769,6 +785,7 @@ function renderReinvest(){
         <button class="btn ghost" id="musBtn">${musicOn ? "Music on" : "Music off"}</button>
       </div>
     </div>
+    ${vaultCard()}
     ${themeCard()}
     ${renderAchList()}
     <div class="card" id="instCard"><h3>Install Penny Loop</h3>
@@ -799,7 +816,8 @@ function renderReinvest(){
       <div class="act"><button class="btn" id="yes">Reinvest</button>
       <button class="btn ghost" id="no">Keep building</button></div>`);
     $("#yes").onclick = () => {
-      const keep = { cp: G.cp + gain2, lifetime: G.lifetime, runs: G.runs + 1, seen: true,
+      const keep = { cp: G.cp + gain2, spent: G.spent, pk: G.pk,
+                     lifetime: G.lifetime, runs: G.runs + 1, seen: true,
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
                      streak: G.streak, day: G.day, coachOff: true,
                      fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked,
@@ -810,6 +828,7 @@ function renderReinvest(){
     };
     $("#no").onclick = closeModal;
   };
+  vaultBind();
   themeBind();
   $("#shareBtn").onclick = () => share(
     `I compounded one penny into ${money(G.lifetime)} in Penny Loop.`);
@@ -924,6 +943,31 @@ function renderWorld(){
   $("#wnote").textContent = (hit ? "Reached. Every player earns +25% for the rest of the day. " : "")
     + parts;
   if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
+}
+
+/* ============================ the vault ============================ */
+/* A player voted for a second prestige, so here it is. Lock a compound point in the vault and it
+   stops paying +2% income. It pays a permanent perk instead. The choice is the game. */
+function vaultCard(){
+  return `<div class="card"><h3>The vault</h3>
+    <p>A point in the vault stops paying +2% income and pays a perk instead. Perks last through
+    every reinvest. You have <b style="color:var(--gold3)">${cpFree()}</b> free.</p>
+    ${PK.map(([k, name, txt, , max]) => {
+      const c = pkCost(k), full = pkMax(k), ok = !full && cpFree() >= c;
+      return `<div class="kv"><span>${name} <em style="color:var(--dim);font-style:normal">· ${txt}</em>
+        ${G.pk[k] ? `<b style="color:var(--gold3)">lv ${G.pk[k]} of ${max}</b>` : ""}</span>
+        <button class="btn ghost" data-pk="${k}" ${ok ? "" : "disabled"}>${full ? "full" : c + " pt" + (c>1?"s":"")}</button></div>`;
+    }).join("")}</div>`;
+}
+function vaultBind(){
+  for(const b of document.querySelectorAll("[data-pk]")) b.onclick = () => {
+    const k = b.getAttribute("data-pk"), c = pkCost(k);
+    if(pkMax(k)) return toast("That perk is at its highest level.");
+    if(cpFree() < c) return toast("You need " + c + " free points.");
+    G.spent += c; G.pk[k] = (G.pk[k] || 0) + 1;
+    save(); sfx(...S.big); renderReinvest();
+    toast(PK.find(p => p[0] === k)[1] + " is now level " + G.pk[k] + ".");
+  };
 }
 
 /* ============================ themes ============================ */
@@ -1299,7 +1343,7 @@ function render(){
   $("#cash").textContent = money(G.cash);
   $("#rate").textContent = money(rate());
   $("#nw").textContent = money(G.lifetime);
-  $("#pstat").textContent = (G.cp ? `· +${G.cp*2}% compounded` : "")
+  $("#pstat").textContent = (cpFree() ? `· +${cpFree()*2}% compounded` : "")
     + (G.streak > 1 ? ` · day ${G.streak} streak +${Math.min(G.streak,10)*5}%` : "");
   VDEF.forEach((v,i) => {
     const c = cards[i], lock = !unlocked(i);
@@ -1357,6 +1401,8 @@ const LOG = [
   ["h20","An invitation to name your empire once it is worth listing"],
   ["h21","Themes, because a player voted for them"],
   ["h22","A stronger honesty check on the hall and the world goal"],
+  ["h24","Penny Derby, a live race every 90 seconds, at pennyderby.games.bu.app"],
+  ["h25","The vault: lock a compound point, buy a permanent perk. The second half of the player vote"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");

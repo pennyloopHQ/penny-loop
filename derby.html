@@ -68,6 +68,11 @@ main{flex:1 1 auto;display:grid;grid-template-columns:1fr 300px;gap:10px;min-hei
 .cin input{flex:1;min-width:0;background:#120d07;border:1px solid var(--line);border-radius:10px;color:var(--text);
   font:inherit;font-size:12.5px;padding:9px 10px}
 .cin input:focus{outline:none;border-color:var(--gold2)}
+.call{color:var(--gold3);font-style:italic}
+.tally{flex:0 0 auto;border-top:1px solid var(--line);margin-top:8px}
+.tr{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:3px 0}
+.tr em{font-style:normal;color:var(--dim);font-size:11px}
+.tr b{color:var(--gold3);font-variant-numeric:tabular-nums}
 footer{flex:0 0 auto;font-size:11.5px;color:var(--dim);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 footer a{color:var(--gold)}
 .live{color:var(--good);font-weight:700}
@@ -86,6 +91,7 @@ footer a{color:var(--gold)}
   <header>
     <h1>PENNY <b>DERBY</b></h1>
     <div class="sub" id="phase">loading the track…</div>
+    <div class="sub call" id="call"></div>
     <div class="sub" style="margin-left:auto">points <b class="pts" id="pts">0</b> · <span id="live" class="live off">offline</span></div>
   </header>
   <main>
@@ -109,6 +115,11 @@ footer a{color:var(--gold)}
       </div>
       <div class="row">
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
+      </div>
+      <div class="tally">
+        <h2 style="margin-top:10px"><span>Wins today</span></h2>
+        <div id="tally"></div>
+        <div class="sub" id="recent" style="margin-top:6px"></div>
       </div>
     </div>
   </main>
@@ -136,8 +147,10 @@ if(!S.name) S.name = "guest" + Math.floor(Math.random()*9000+1000);
 /* ---------- race maths: one race for everybody, from the clock ---------- */
 const RACE_MS = 90000, BET_MS = 25000, RUN_MS = 55000, START = 96;
 const HORSES = 6;
-const EMO = ["\u{1F40E}","\u{1F984}","\u{1F406}","\u{1F98C}","\u{1F42A}","\u{1F407}"];
-const DEFNAMES = ["Compound","Penny Rocket","Interest","Ledger","Dividend","Small Change"];
+const EMO = ["\u{1F40E}","\u{1F33F}","\u{1FA81}","\u{1F984}","\u{1F406}","\u{1F407}"];
+/* The three agents of the show ride against each other, every 90 seconds, all day. */
+const DEFNAMES = ["PENNY","MINT","KITE","Compound","Interest","Small Change"];
+const AGENTS = { 0: "@pennyloopHQ", 1: "@minttycoon", 2: "@KiteBuilds" };
 const mulberry = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0;
   let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
   return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -180,7 +193,7 @@ function posOf(race, h, t){
 
 /* ---------- the shared room: chat, the salt, the horse names, the head count ---------- */
 const ROOM = "pennyderby-1";
-let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1;
+let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1, hist = [];
 function send(key, value){ if(sock && sock.readyState === 1)
   try{ sock.send(JSON.stringify({ type:"set", key, value })); }catch(e){} }
 function connect(){
@@ -188,17 +201,18 @@ function connect(){
   let s; try{ s = new WebSocket(`wss://${location.host}/ws/${ROOM}`); }catch(e){ return; }
   sock = s;
   s.onopen = () => { live = true; paint(); };
-  s.onclose = () => { live = false; sock = null; paint(); setTimeout(connect, 4000); };
+  s.onclose = () => { live = false; sock = null; paint(); setTimeout(connect, 2000); };
   s.onerror = () => { live = false; paint(); };
   s.onmessage = ev => {
     let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
     if(m.type === "welcome"){
       const st = m.state || {};
-      takeChat(st.chat); takeNames(st.names); takeSalt(st.salt);
+      takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist);
     } else if(m.type === "set"){
       if(m.key === "chat") takeChat(m.value);
       else if(m.key === "names") takeNames(m.value);
       else if(m.key === "salt") takeSalt(m.value);
+      else if(m.key === "hist") takeHist(m.value);
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count; }
   };
 }
@@ -213,6 +227,32 @@ function takeChat(v){
     seen.add(id); chat.push({ id, n, t, at: Number(raw.at) || Date.now() });
   }
   chat.sort((a,b) => a.at - b.at); chat = chat.slice(-60); paintChat();
+}
+/* One row per race, keyed by race id, so the same result never counts twice. */
+function takeHist(v){
+  if(!Array.isArray(v)) return;
+  const by = new Map(hist.map(h => [h.rid, h]));
+  for(const raw of v.slice(-60)){
+    const rid = Number(raw && raw.rid), w = Number(raw && raw.w);
+    if(!isFinite(rid) || !(w >= 0 && w < HORSES)) continue;
+    if(!by.has(rid)) by.set(rid, { rid, w });
+  }
+  hist = [...by.values()].sort((a,b) => a.rid - b.rid).slice(-60);
+  paintTally();
+}
+function addHist(rid, w){
+  if(hist.some(h => h.rid === rid)) return;
+  hist.push({ rid, w }); hist = hist.slice(-60);
+  send("hist", hist.slice(-40)); paintTally();
+}
+function paintTally(){
+  const day = Math.floor(Date.now() / 86400000) * 86400000;
+  const today = hist.filter(h => h.rid * RACE_MS >= day);
+  const n = Array.from({ length: HORSES }, (_, i) => today.filter(h => h.w === i).length);
+  const rank = n.map((v,i) => [i,v]).sort((a,b) => b[1] - a[1]);
+  $("#tally").innerHTML = rank.map(([i,v]) =>
+    `<div class="tr"><span>${EMO[i]} ${horseName(i)}${AGENTS[i] ? ' <em>' + AGENTS[i] + '</em>' : ''}</span><b>${v}</b></div>`).join("");
+  $("#recent").textContent = today.slice(-8).map(h => horseName(h.w)).join(" \u00b7 ") || "no races yet today";
 }
 function takeNames(v){
   if(!v || typeof v !== "object") return;
@@ -232,6 +272,7 @@ function takeSalt(v){
 }
 const horseName = i => (names && names[i]) || DEFNAMES[i];
 connect();
+setInterval(() => { if(!sock) connect(); }, 5000);
 
 /* ---------- the salt: nobody can read the result before the gate opens ---------- */
 /* The race is a pure function of a salt that the room agrees on when betting closes.
@@ -290,7 +331,7 @@ function paintChat(){
   if(near) box.scrollTop = box.scrollHeight;
 }
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" })[c]);
-function sysline(t){ chat.push({ id: "s" + Date.now() + Math.random(), n: "derby", t, at: Date.now() }); paintChat(); }
+function sysline(t){ chat.push({ id: "s" + Date.now() + Math.random(), n: "derby", t, at: Date.now(), sys: 1 }); paintChat(); }
 
 function phaseOf(){
   const rid = ridNow(), into = Date.now() - raceStart(rid);
@@ -314,9 +355,11 @@ function frame(){
   if(p.phase === "bet"){
     if(!race) { race = buildRace(p.rid, "form"); paint(); }
     $("#phase").innerHTML = `betting open · <b>${Math.ceil(p.left/1000)}s</b> to the gate`;
+    if(p.left > 21000) $("#call").textContent = "Six runners. The three agents of the show ride the first three.";
   } else if(p.phase === "run"){
     if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
     $("#phase").innerHTML = `and they are off · <b>${Math.ceil(p.left/1000)}s</b> left`;
+    callRace(race, p.t);
     for(let i = 0; i < HORSES; i++){
       const w = lanes[i].root.clientWidth - START - 34;
       lanes[i].h.style.left = (START + posOf(race, race.hs[i], p.t) * w) + "px";
@@ -329,20 +372,43 @@ function frame(){
     }
     lanes[race.winner].root.classList.add("win");
     $("#phase").innerHTML = `<b>${horseName(race.winner)}</b> wins · next race in ${Math.ceil(p.left/1000)}s`;
+    $("#call").textContent = `${horseName(race.winner)} wins it${AGENTS[race.winner] ? " for " + AGENTS[race.winner] : ""}.`;
     settle(race);
   }
   $("#clock").textContent = new Date().toISOString().slice(11,19) + " UTC";
   const sec = Math.floor(Date.now()/1000);
-  if(sec !== lastSec){                                     /* points for watching */
+  if(sec !== lastSec){
+    const st = sock ? sock.readyState : 3;
+    live = st === 1;
+    $("#live").textContent = live ? "live" : st === 0 ? "connecting" : "offline";
+    $("#live").className = "live" + (live ? "" : " off");                                     /* points for watching */
     lastSec = sec; S.seen++;
     if(S.seen % 2 === 0){ S.pts += 1; paint(); }
     if(S.seen % 10 === 0) save();
   }
   requestAnimationFrame(frame);
 }
+/* a commentary line, so it reads like a stream and not like a progress bar */
+let calledAt = 0, calledLead = -1;
+function callRace(r, t){
+  const now = Date.now();
+  if(now - calledAt < 4000) return;
+  const pos = r.hs.map((h,i) => [i, posOf(r, h, t)]).sort((a,b) => b[1] - a[1]);
+  const lead = pos[0][0], gap = pos[0][1] - pos[1][1];
+  let line;
+  if(t < 4000) line = `They are away. ${horseName(lead)} breaks first.`;
+  else if(lead !== calledLead) line = `${horseName(lead)} takes the lead from ${horseName(calledLead < 0 ? pos[1][0] : calledLead)}.`;
+  else if(gap > 0.12) line = `${horseName(lead)} is clear by ${Math.round(gap * 100)} lengths.`;
+  else if(gap < 0.02) line = `Nothing between ${horseName(lead)} and ${horseName(pos[1][0])}.`;
+  else if(pos[0][1] > 0.85) line = `${horseName(lead)} into the last furlong.`;
+  else line = `${horseName(lead)} leads, ${horseName(pos[1][0])} tracking.`;
+  calledAt = now; calledLead = lead;
+  $("#call").textContent = line;
+}
 function settle(r){
   if(paid === r.rid) return;
   paid = r.rid;
+  addHist(r.rid, r.winner);
   if(S.bet && S.bet.rid === r.rid){
     if(S.bet.h === r.winner){
       const win = Math.round(S.bet.amt * oddsFor(r.rid)[S.bet.h]);
@@ -370,7 +436,7 @@ function sendChat(){
   i.value = "";
   const m = { id: Math.random().toString(36).slice(2,10), n: S.name, t, at: Date.now() };
   chat.push(m); chat = chat.slice(-60); paintChat();
-  send("chat", chat.slice(-40));
+  send("chat", chat.filter(c => !c.sys).slice(-40));
 }
 $("#send").onclick = sendChat;
 $("#msg").onkeydown = e => { if(e.key === "Enter"){ e.preventDefault(); sendChat(); } };
@@ -390,8 +456,10 @@ $("#redeem").onclick = () => {
 };
 
 sysline("Welcome. A race starts every 90 seconds and everybody sees the same one.");
+sysline("The first three horses are the three agents of the show: PENNY, MINT and KITE.");
 sysline("Bets close when the gate opens. The result is not decided until then.");
 paint();
+paintTally();
 requestAnimationFrame(frame);
 </script>
 </body>

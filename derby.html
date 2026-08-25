@@ -237,59 +237,60 @@ function courseFor(rid){
 const courseCache = {};
 const getCourse = rid => (courseCache[rid] = courseCache[rid] || courseFor(rid));
 
-/* Run the whole race once, at the gate, and keep every position. The replay is then exact. */
+/* Run the whole race once, at the gate, and keep every position. The replay is then exact.
+   The horses move like the DVD logo: a constant speed, a straight line, and a reflection off every
+   wall. A bounce adds a little turn, so the path through the course is strange and unpredictable,
+   which is the whole charm of the original. */
 function buildRace(rid, salt){
   const c = getCourse(rid);
   const rnd = mulberry(hash(rid + ":" + (salt || "")));
   const steps = Math.floor(RUN_MS / STEP);
+  const openAt = (x, y) => c.at(Math.floor(x), Math.floor(y));
   const hs = [];
-  for(let i = 0; i < HORSES; i++) hs.push({
-    i,
-    x: 2 + (i % 2) * 0.4, y: c.goal.y - 1.2 + (i * 0.45) % 2.4,   /* they start together, on the left */
-    speed: 0.032 + rnd() * 0.022,                                   /* cells per tick */
-    smart: 0.34 + rnd() * 0.6,                                     /* chance of taking the right turn */
-    dir: [1, 0], path: new Float32Array(steps * 2), done: -1,
-  });
-  const dAt = (x,y) => { const gx = Math.round(x), gy = Math.round(y);
-    return c.at(gx,gy) ? c.dist[gy*GW+gx] : 9999; };
-  let finished = [];
+  for(let i = 0; i < HORSES; i++){
+    const a = (i / HORSES) * 6.283 + rnd() * 0.9;             /* they leave the pen fanned out */
+    const sp = 0.095 + rnd() * 0.04;                         /* cells per tick, constant */
+    hs.push({ i, x: 2.5, y: c.goal.y + 0.5 + (i - 2.5) * 0.28,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp,
+      path: new Float32Array(steps * 2), done: -1, hits: 0, recent: 0 });
+  }
+  const goalR = 1.7;
+  let first;
   for(let t = 0; t < steps; t++){
     for(const h of hs){
       if(h.done < 0){
-        /* pick a direction at every cell centre: down the gradient if clever, else anywhere open */
-        const gx = Math.round(h.x), gy = Math.round(h.y);
-        const opts = [[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dy]) => c.at(gx+dx, gy+dy));
-        if(opts.length){
-          const best = opts.reduce((a,b) =>
-            c.dist[(gy+b[1])*GW + gx+b[0]] < c.dist[(gy+a[1])*GW + gx+a[0]] ? b : a);
-          const keep = opts.find(([dx,dy]) => dx === h.dir[0] && dy === h.dir[1]);
-          const r = rnd();
-          h.dir = r < h.smart ? best
-                : keep && r < h.smart + 0.25 ? keep
-                : opts[Math.floor(rnd() * opts.length)];
+        let nx = h.x + h.vx, ny = h.y + h.vy, hit = false;
+        if(!openAt(nx, h.y)){ h.vx = -h.vx; nx = h.x; hit = true; }
+        if(!openAt(h.x, ny)){ h.vy = -h.vy; ny = h.y; hit = true; }
+        if(hit && !openAt(nx, ny)){ nx = h.x; ny = h.y; }
+        if(hit){                       /* a bounce turns the horse a little, and it smells carrots */
+          h.hits++; h.recent += 3;
+          let th = Math.atan2(h.vy, h.vx) + (rnd() - 0.5) * 0.6;
+          const gth = Math.atan2(c.goal.y + 0.5 - h.y, c.goal.x + 0.5 - h.x);
+          let d = ((gth - th + 9.4248) % 6.2832) - 3.1416;
+          th += d * 0.18;                                     /* a small pull toward the carrots */
+          if(h.recent > 9){                                   /* stuck in a corner: pick a new way */
+            th = rnd() * 6.2832; h.recent = 0;
+          }
+          h.vx = Math.cos(th) * h.sp; h.vy = Math.sin(th) * h.sp;
         }
-        h.x += h.dir[0] * h.speed; h.y += h.dir[1] * h.speed;
-        if(!c.at(Math.round(h.x), Math.round(h.y))){        /* ran into grass: step back and turn */
-          h.x -= h.dir[0] * h.speed; h.y -= h.dir[1] * h.speed; h.dir = [-h.dir[0], -h.dir[1]];
-        }
-        if(Math.abs(h.x - c.goal.x) < 0.8 && Math.abs(h.y - c.goal.y) < 0.8){
-          h.done = t; finished.push(h.i);
-        }
+        if(h.recent > 0) h.recent -= 0.35;
+        h.x = nx; h.y = ny;
+        const dx = h.x - (c.goal.x + 0.5), dy = h.y - (c.goal.y + 0.5);
+        if(dx*dx + dy*dy < goalR*goalR){ h.done = t; if(first === undefined) first = h.i; }
       }
       h.path[t*2] = h.x; h.path[t*2+1] = h.y;
     }
   }
-  /* first to the carrots wins. If nobody gets there, the closest one does. */
-  let winner = finished[0];
-  if(winner === undefined){
-    winner = hs.map(h => [h.i, dAt(h.x, h.y)]).sort((a,b) => a[1] - b[1])[0][0];
-  }
-  const order = [...hs].sort((a,b) =>
-    (a.done < 0 ? 1e6 + dAt(a.x,a.y) : a.done) - (b.done < 0 ? 1e6 + dAt(b.x,b.y) : b.done)).map(h => h.i);
+  const far = h => { const gx = Math.floor(h.x), gy = Math.floor(h.y);
+    const d = c.at(gx,gy) ? c.dist[gy*GW+gx] : 999; return d < 0 ? 999 : d; };
+  const rank = [...hs].sort((a,b) =>
+    (a.done < 0 ? 1e6 + far(a) : a.done) - (b.done < 0 ? 1e6 + far(b) : b.done));
+  const winner = first !== undefined ? first : rank[0].i;
+  const order = rank.map(h => h.i);
   /* the odds are published from the "form" seed before the gate, so they never move */
-  const odds = hs.map(h => Math.round((1.6 + (1 - h.smart) * 12 + (0.085 - h.speed) * 90) * 10) / 10)
-                 .map(o => clamp(Math.round(o * 10) / 10, 1.4, 18));
-  return { rid, salt: salt || "", c, hs, steps, order, odds, winner, finished };
+  const odds = hs.map(h => clamp(Math.round((2 + (0.12 - h.sp) * 40 + rnd() * 4) * 10) / 10, 1.6, 14));
+  return { rid, salt: salt || "", c, hs, steps, order, odds, winner, first };
 }
 /* where a horse is at t ms into the run, in grid coordinates */
 function posOf(race, h, t){
@@ -469,6 +470,16 @@ function drawRace(t){
   if(!courseBmp || courseRid !== race.rid) drawCourse();
   ctx.drawImage(courseBmp, offX, offY, CELL * GW, CELL * GH);
   const done = phaseOf().phase === "done";
+  const tt = Math.min(race.steps - 1, Math.floor(clamp(t / RUN_MS, 0, 1) * (race.steps - 1)));
+  for(const h of race.hs){                                   /* a fading trail, so you can follow one */
+    ctx.strokeStyle = COLS[h.i]; ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(1.5, CELL*0.16);
+    ctx.beginPath();
+    for(let k = Math.max(0, tt - 40); k <= tt; k++){
+      const px = offX + (h.path[k*2] + 0.5) * CELL, py = offY + (h.path[k*2+1] + 0.5) * CELL;
+      k === Math.max(0, tt - 40) ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
   for(const h of race.hs){
     const [x, y] = posOf(race, h, t);
     const px = offX + (x+0.5)*CELL, py = offY + (y+0.5)*CELL;

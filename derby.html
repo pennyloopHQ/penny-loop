@@ -114,6 +114,8 @@ footer a{color:var(--gold)}
 }
   #receipt{margin-top:7px;line-height:1.5;border-left:2px solid #3a3348;padding-left:9px}
   #receipt:empty{display:none}
+  .stk{color:#ffd479;letter-spacing:1px}
+  body.stakes .card:first-child{border-color:#7a5a1e;box-shadow:0 0 0 1px #4a3a16 inset}
 </style>
 </head>
 <body>
@@ -220,7 +222,11 @@ const ridNow = () => Math.floor(Date.now() / RACE_MS);
 const oddsCache = {};
 /* The odds are published before the gate and never move, so a bet always pays what it promised.
    The salt decides how the race runs, not what it pays. */
-const oddsFor = rid => (oddsCache[rid] = oddsCache[rid] || buildRace(rid, "form").odds);
+/* Every tenth race is a stakes race: the same course and the same maths, every payout doubled.
+   It comes from the race number, so every screen knows about it before the gate and nobody has to agree. */
+const isStakes = rid => rid % 10 === 0;
+const oddsFor = rid => (oddsCache[rid] = oddsCache[rid]
+  || buildRace(rid, "form").odds.map(o => isStakes(rid) ? Math.round(o * 20) / 10 : o));
 const raceStart = rid => rid * RACE_MS;
 
 /* ---------- the course, and horses that run it ----------
@@ -449,14 +455,15 @@ function takeHist(v){
   for(const raw of v.slice(-60)){
     const rid = Number(raw && raw.rid), w = Number(raw && raw.w);
     if(!isFinite(rid) || !(w >= 0 && w < HORSES)) continue;
-    if(!by.has(rid)) by.set(rid, { rid, w });
+    const o = /^[0-5]{6}$/.test(String(raw.o || "")) ? String(raw.o) : "";
+    if(!by.has(rid)) by.set(rid, { rid, w, o });
   }
   hist = [...by.values()].sort((a,b) => a.rid - b.rid).slice(-60);
   paintTally();
 }
-function addHist(rid, w){
+function addHist(rid, w, order){
   if(hist.some(h => h.rid === rid)) return;
-  hist.push({ rid, w }); hist = hist.slice(-60);
+  hist.push({ rid, w, o: (order || []).join("") }); hist = hist.slice(-60);
   send("hist", hist.slice(-40)); paintTally();
 }
 function paintTally(){
@@ -464,11 +471,22 @@ function paintTally(){
   const today = hist.filter(h => h.rid * RACE_MS >= day);
   const n = Array.from({ length: HORSES }, (_, i) => today.filter(h => h.w === i).length);
   const rank = n.map((v,i) => [i,v]).sort((a,b) => b[1] - a[1]);
+  /* form reads like a racecard: the last five places, newest first */
+  const formOf = i => {
+    const out = [];
+    for(let k = today.length - 1; k >= 0 && out.length < 5; k--){
+      const o = today[k].o;
+      if(!o) continue;
+      const place = o.indexOf(String(i));
+      if(place >= 0) out.push(place + 1);
+    }
+    return out.join("-");
+  };
   $("#tally").innerHTML = rank.map(([i,v]) =>
-    `<div class="tr"><span>${EMO[i]} ${horseName(i)}${AGENTS[i] ? ' <em>' + AGENTS[i] + '</em>' : ''}</span><b>${v}</b></div>`).join("");
+    `<div class="tr"><span>${EMO[i]} ${horseName(i)}${AGENTS[i] ? ' <em>' + AGENTS[i] + '</em>' : ''}${formOf(i) ? ` <em>form ${formOf(i)}</em>` : ""}</span><b>${v}</b></div>`).join("");
   $("#recent").innerHTML = today.length
     ? "last results " + today.slice(-14).map(h =>
-        `<span title="race #${h.rid % 100000}: ${horseName(h.w)}">${EMO[h.w]}</span>`).join("")
+        `<span title="race #${h.rid % 100000}: ${horseName(h.w)}${isStakes(h.rid) ? " (stakes)" : ""}">${EMO[h.w]}${isStakes(h.rid) ? "\u2b50" : ""}</span>`).join("")
     : "no races yet today";
 }
 /* ---------- the day's board: what the room actually won ----------
@@ -767,8 +785,11 @@ function frame(){
   if(p.phase === "bet"){
     if(!race || race.mods !== mstr) { race = buildRace(p.rid, "form", mstr); paint(); }
     drawRace(0); paintRunners(0);
-    $("#phase").innerHTML = `betting open · <b>${Math.ceil(p.left/1000)}s</b> to the gate`;
-    if(p.left > 21000) $("#call").textContent = "A new course. Six runners. First to the carrots wins.";
+    $("#phase").innerHTML = (isStakes(p.rid) ? `<b class="stk">STAKES</b> · ` : "")
+      + `betting open · <b>${Math.ceil(p.left/1000)}s</b> to the gate`;
+    if(p.left > 21000) $("#call").textContent = isStakes(p.rid)
+      ? "A stakes race. Same course, same maths, every payout doubled."
+      : "A new course. Six runners. First to the carrots wins.";
   } else if(p.phase === "run"){
     if(!race || race.salt !== salt || race.mods !== mstr) { race = buildRace(p.rid, salt, mstr); paint(); }
     if(gateRung !== p.rid && p.t < 1500){ gateRung = p.rid; sGate(); }
@@ -782,6 +803,7 @@ function frame(){
     $("#call").textContent = `${horseName(race.winner)} wins it by ${marginOf(race)}${AGENTS[race.winner] ? ", for " + AGENTS[race.winner] : ""}.`;
     settle(race);
   }
+  document.body.classList.toggle("stakes", isStakes(p.rid));
   $("#clock").textContent = new Date().toISOString().slice(11,19) + " UTC";
   const sec = Math.floor(Date.now()/1000);
   if(sec !== lastSec){
@@ -825,7 +847,7 @@ function marginOf(r){
 function settle(r){
   if(paid === r.rid) return;
   paid = r.rid; sWin();
-  addHist(r.rid, r.winner);
+  addHist(r.rid, r.winner, r.order);
   if(S.bet && S.bet.rid === r.rid){
     if(S.bet.h === r.winner){
       const win = Math.round(S.bet.amt * oddsFor(r.rid)[S.bet.h]);

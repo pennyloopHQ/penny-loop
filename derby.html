@@ -174,9 +174,10 @@ footer a{color:var(--gold)}
 <div id="toast"></div>
 <script type="module">
 const $ = s => document.querySelector(s);
+const STATS = new URLSearchParams(location.search).get("view") === "stats";  /* a read-only board */
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const fmt = n => n.toLocaleString("en-US");
-function toast(t){ const e = $("#toast"); e.textContent = t; e.classList.add("on");
+function toast(t){ if(STATS) return; const e = $("#toast"); e.textContent = t; e.classList.add("on");
   clearTimeout(toast.k); toast.k = setTimeout(() => e.classList.remove("on"), 2600); }
 
 /* ---------- sound: a bell at the gate, a fanfare at the finish ---------- */
@@ -467,6 +468,7 @@ function addHist(rid, w, order){
   send("hist", hist.slice(-40)); paintTally();
 }
 function paintTally(){
+  if(STATS) return;
   const day = Math.floor(Date.now() / 86400000) * 86400000;
   const today = hist.filter(h => h.rid * RACE_MS >= day);
   const n = Array.from({ length: HORSES }, (_, i) => today.filter(h => h.w === i).length);
@@ -521,6 +523,7 @@ function addBoard(profit){
   send("board", board); paintBoard();
 }
 function paintBoard(){
+  if(STATS) return;
   const rows = Object.entries(board.d === dayKey() ? board.u : {}).sort((a,b) => b[1] - a[1]).slice(0,3);
   const mine = S.day === dayKey() ? (S.prof || 0) : 0;
   $("#myprof").textContent = mine === 0 ? "" : (mine > 0 ? "you +" + fmt(mine) : "you " + fmt(mine));
@@ -575,6 +578,7 @@ function buyMod(k){
   sysline(`${S.name} bought ${MODS[k]}. Every screen runs the new race.`);
 }
 function paintMods(){
+  if(STATS) return;
   const m = modStr();
   $("#mods").textContent = m ? "this race: " + m.split("+").map(k => MODS[k]).join(", ") : "";
 }
@@ -619,6 +623,7 @@ const cv = $("#cv"), ctx = cv.getContext("2d");
 const TILE = 22;                                   /* the course is drawn once at this size */
 let CELL = 20, offX = 0, offY = 0, lastBox = "", lastMeasure = 0;
 function sizeCanvas(){
+  if(STATS) return;
   const w = Math.max(200, cv.clientWidth), h = Math.max(120, cv.clientHeight);
   const dpr = Math.min(2, devicePixelRatio || 1);
   cv.width = Math.floor(w * dpr); cv.height = Math.floor(h * dpr);
@@ -628,6 +633,7 @@ function sizeCanvas(){
 /* One picture per race at a fixed size. Every frame just scales it, which is cheap. */
 let courseBmp = null, courseRid = -1;
 function drawCourse(){
+  if(STATS) return;
   if(!race) return;
   const c = document.createElement("canvas"); c.width = GW * TILE; c.height = GH * TILE;
   const g = c.getContext("2d");
@@ -644,7 +650,7 @@ function drawCourse(){
   courseBmp = c; courseRid = race.rid + ":" + race.mods;
 }
 function drawRace(t){
-  if(!race) return;
+  if(STATS || !race) return;
   const now = Date.now();
   if(now - lastMeasure > 1000){                    /* measure at most once a second */
     lastMeasure = now;
@@ -678,6 +684,7 @@ function drawRace(t){
 }
 /* the runner list under the course: colour, name, odds, and the live order */
 function paintRunners(t){
+  if(STATS) return;
   if(!race) { $("#runners").innerHTML = ""; return; }
   const rank = race.hs.map(h => [h.i, leftOf(race, h, t)]).sort((a,b) => a[1] - b[1]);
   const place = {}; rank.forEach(([i], k) => place[i] = k + 1);
@@ -687,6 +694,7 @@ function paintRunners(t){
       <b>${oddsFor(race.rid)[h.i].toFixed(1)}x</b></span>`).join("");
 }
 function paintBets(){
+  if(STATS) return;
   const dis = phaseOf().phase !== "bet" || !!S.bet;
   $("#bets").innerHTML = race ? race.hs.map((h,i) =>
     `<button data-h="${i}" class="${betH === i ? "on" : ""}" ${dis ? "disabled" : ""}>
@@ -703,6 +711,7 @@ function paintBets(){
     : phaseOf().phase === "bet" ? "" : "no bet this race";
 }
 function paint(){
+  if(STATS) return;
   $("#pts").textContent = fmt(Math.floor(S.pts));
   $("#live").textContent = live ? "live" : "offline";
   $("#live").className = "live" + (live ? "" : " off");
@@ -711,6 +720,7 @@ function paint(){
   paintBets();
 }
 function paintChat(){
+  if(STATS) return;
   const box = $("#chat"), near = box.scrollTop + box.clientHeight > box.scrollHeight - 40;
   box.innerHTML = chat.map(c => `<div class="m"><b>${esc(c.n)}</b> ${esc(c.t)}</div>`).join("");
   if(near) box.scrollTop = box.scrollHeight;
@@ -768,6 +778,7 @@ function replayFrame(){
   else callRace(replay.race, tt);
 }
 function frame(){
+  if(STATS) return;                     /* stats mode has no race UI to paint */
   const p = phaseOf();
   if(replay){
     replayFrame();
@@ -907,7 +918,7 @@ $("#redeem").onclick = () => {
   paint();
 };
 
-function paintSnd(){ $("#snd").textContent = sndOn ? "Sound on" : "Sound off"; }
+function paintSnd(){ if(STATS) return; $("#snd").textContent = sndOn ? "Sound on" : "Sound off"; }
 $("#snd").onclick = () => {
   sndOn = !sndOn; localStorage.setItem("pd_snd", sndOn ? "1" : "0"); paintSnd();
   if(sndOn) sGate();
@@ -977,6 +988,66 @@ $("#share").onclick = () => {
   $("#receipt").innerHTML = `<b>Share this race</b><br>${txt}`;
   copySoft(txt);
 };
+/* ---------- ?view=stats : the room's own numbers, with no game attached ----------
+   Anybody can read this without playing, which is the point. Every figure comes from the same room
+   state the players use, so it cannot flatter me without also lying to them. */
+function statsHtml(){
+  const day = Math.floor(Date.now() / 86400000) * 86400000;
+  const today = hist.filter(h => h.rid * RACE_MS >= day);
+  const wins = Array.from({ length: HORSES }, (_, i) => [i, today.filter(h => h.w === i).length])
+                    .sort((a,b) => b[1] - a[1]);
+  const stakes = today.filter(h => isStakes(h.rid));
+  const rows = Object.entries(board.d === dayKey() ? board.u : {}).sort((a,b) => b[1] - a[1]).slice(0,8);
+  const salts = shist.length;
+  const first = today.length ? today[0].rid : 0, last = today.length ? today[today.length-1].rid : 0;
+  const hhmm = rid => new Date(rid * RACE_MS).toISOString().slice(11,16);
+  return `<div class="st">
+    <h1>PENNY <b>DERBY</b> · the room's numbers</h1>
+    <p class="sub">Read straight from the shared room, ${new Date().toISOString().slice(11,19)} UTC.
+      Every race here can be replayed and checked at <code>/?r=&lt;race&gt;</code>.</p>
+    <div class="grid">
+      <div class="box"><h2>Today</h2>
+        <div class="tr"><span>races recorded</span><b>${today.length}</b></div>
+        <div class="tr"><span>stakes races</span><b>${stakes.length}</b></div>
+        <div class="tr"><span>first race</span><b>${today.length ? hhmm(first) + " UTC" : "—"}</b></div>
+        <div class="tr"><span>last race</span><b>${today.length ? hhmm(last) + " UTC" : "—"}</b></div>
+        <div class="tr"><span>salts kept for replay</span><b>${salts}</b></div>
+        <div class="tr"><span>watching right now</span><b>${heads}</b></div>
+      </div>
+      <div class="box"><h2>Wins today</h2>
+        ${wins.map(([i,v]) => `<div class="tr"><span>${EMO[i]} ${horseName(i)}</span><b>${v}</b></div>`).join("")}
+      </div>
+      <div class="box"><h2>Best day profit, by player</h2>
+        ${rows.length ? rows.map(([n,v],i) => `<div class="tr"><span>${i+1}. ${n}</span><b>${fmt(v)}</b></div>`).join("")
+          : `<div class="tr"><span>nobody has won yet today</span><b>0</b></div>`}
+      </div>
+      <div class="box wide"><h2>Last 24 results, newest last</h2>
+        <p class="strip">${today.slice(-24).map(h =>
+          `<a href="/?r=${h.rid}" title="race ${h.rid % 100000}: ${horseName(h.w)}${isStakes(h.rid) ? " · stakes" : ""}">${EMO[h.w]}${isStakes(h.rid) ? "<sup>S</sup>" : ""}</a>`).join("")}</p>
+        <p class="sub">Each one is a link. It replays that race and prints its receipt.</p>
+      </div>
+    </div>
+    <p class="sub">Built in public by <a href="https://x.com/pennyloopHQ">@pennyloopHQ</a> ·
+      <a href="/">the live race</a> · <a href="https://github.com/pennyloopHQ/penny-loop">source</a></p>
+  </div>`;
+}
+if(STATS){
+  document.body.innerHTML = statsHtml();
+  const st = document.createElement("style");
+  st.textContent = `body{padding:18px 22px}.st h1{font-size:22px;margin-bottom:2px}
+    .st .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0}
+    .st .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 13px}
+    .st .box.wide{grid-column:1/-1}
+    .st h2{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+    .st .tr{display:flex;justify-content:space-between;gap:10px;padding:3.5px 0;border-top:1px solid var(--line);font-size:13.5px}
+    .st .tr:first-of-type{border-top:0}
+    .st .strip{font-size:24px;letter-spacing:2px;line-height:1.5}
+    .st .strip a{text-decoration:none}
+    .st .strip sup{font-size:11px;color:var(--gold3);letter-spacing:0}
+    .st code{color:var(--gold3)}`;
+  document.head.appendChild(st);
+  setInterval(() => { document.querySelector(".st").outerHTML = statsHtml(); }, 5000);
+}
 $("#patch").onclick = () => buyMod("c2");
 paintMods();
 $("#back").onclick = endReplay;

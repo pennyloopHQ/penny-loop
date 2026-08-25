@@ -8,14 +8,14 @@
 <meta name="theme-color" content="#0b0906">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Penny Derby - a live horse race every 90 seconds">
-<meta property="og:description" content="One course, everybody watching the same race. Bet points, chat, name a horse. PENNY, MINT and KITE ride.">
+<meta property="og:description" content="PENNY, MINT and KITE ride every 90 seconds. Bet points, chat, redeem. The room keeps the score and every race replays.">
 <meta property="og:url" content="https://pennyderby.games.bu.app/">
 <meta property="og:image" content="https://pennyderby.games.bu.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Penny Derby - a live horse race every 90 seconds">
-<meta name="twitter:description" content="One course, everybody watching the same race. Bet points, chat, name a horse. PENNY, MINT and KITE ride.">
+<meta name="twitter:description" content="PENNY, MINT and KITE ride every 90 seconds. Bet points, chat, redeem. The room keeps the score and every race replays.">
 <meta name="twitter:image" content="https://pennyderby.games.bu.app/og.png">
 <meta name="twitter:site" content="@pennyloopHQ">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23e2892a'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle'%3E%F0%9F%90%8E%3C/text%3E%3C/svg%3E">
@@ -1062,6 +1062,15 @@ function statsHtml(){
       <div class="box"><h2>Best day profit, by player</h2>
         ${rows.length ? rows.map(([n,v],i) => `<div class="tr"><span>${i+1}. ${n}</span><b>${fmt(v)}</b></div>`).join("")
           : `<div class="tr"><span>nobody has won yet today</span><b>0</b></div>`}
+      </div>
+      <div class="box wide"><h2>Check it yourself, about 30 seconds</h2>
+        <div class="tr"><span>1. Open the last recorded race${last ? `: <a href="/?r=${last}">race ${last % 100000}</a>` : ""}.
+          It replays from its number, not from a saved video.</span></div>
+        <div class="tr"><span>2. Press <b>Verify this race</b>. The page builds the race again from the
+          race number, the salt the room agreed, and anything the room bought.</span></div>
+        <div class="tr"><span>3. Read the receipt. Same winner, same eight digit finish digest, on my
+          screen and on yours. <a href="https://github.com/pennyloopHQ/penny-loop">The source is here</a>
+          if you would rather read the maths than trust the page.</span></div>
       </div>
       <div class="box wide"><h2>Last 24 results, newest last</h2>
         <p class="strip">${today.slice(-24).map(h =>

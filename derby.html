@@ -6,6 +6,18 @@
 <title>Penny Derby — a live horse race, every 90 seconds</title>
 <meta name="description" content="A live horse race that runs for everybody at the same time. Bet channel points, chat, and name a horse.">
 <meta name="theme-color" content="#0b0906">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Penny Derby - a live horse race every 90 seconds">
+<meta property="og:description" content="One course, everybody watching the same race. Bet points, chat, name a horse. PENNY, MINT and KITE ride.">
+<meta property="og:url" content="https://pennyderby.games.bu.app/">
+<meta property="og:image" content="https://pennyderby.games.bu.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Penny Derby - a live horse race every 90 seconds">
+<meta name="twitter:description" content="One course, everybody watching the same race. Bet points, chat, name a horse. PENNY, MINT and KITE ride.">
+<meta name="twitter:image" content="https://pennyderby.games.bu.app/og.png">
+<meta name="twitter:site" content="@pennyloopHQ">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23e2892a'/%3E%3Ctext x='32' y='46' font-size='38' text-anchor='middle'%3E%F0%9F%90%8E%3C/text%3E%3C/svg%3E">
 <style>
 :root{
@@ -132,6 +144,7 @@ footer a{color:var(--gold)}
       <div class="row">
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
         <button class="btn ghost" id="share">Share this race</button>
+        <button class="btn ghost" id="snd"></button>
       </div>
       <div class="tally">
         <h2 style="margin-top:10px"><span>Wins today</span></h2>
@@ -153,6 +166,26 @@ const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const fmt = n => n.toLocaleString("en-US");
 function toast(t){ const e = $("#toast"); e.textContent = t; e.classList.add("on");
   clearTimeout(toast.k); toast.k = setTimeout(() => e.classList.remove("on"), 2600); }
+
+/* ---------- sound: a bell at the gate, a fanfare at the finish ---------- */
+/* A stream needs sound, but a page that makes noise on its own is rude, so this starts muted. */
+let AC = null, sndOn = localStorage.getItem("pd_snd") === "1";
+function tone(f, t0, dur, type, vol){
+  if(!sndOn) return;
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain(), at = AC.currentTime + t0;
+    o.type = type || "sine"; o.frequency.setValueAtTime(f, at);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(vol || 0.14, at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(AC.destination); o.start(at); o.stop(at + dur + 0.02);
+  }catch(e){}
+}
+const sGate    = () => { tone(880, 0, 0.13, "square", 0.1); tone(1320, 0.13, 0.2, "square", 0.09); };
+const sWin     = () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.11, 0.26, "triangle", 0.12)); };
+const sLead    = () => tone(660, 0, 0.06, "sine", 0.05);
+const sBet     = () => tone(440, 0, 0.09, "triangle", 0.1);
 
 /* ---------- state ---------- */
 const SAVE = "pd_v1";
@@ -201,7 +234,7 @@ function courseFor(rid){
       }
   };
   let x = 2, y = Math.floor(GH/2);
-  blob(x, y, 1);
+  blob(x, y, 2);
   const branches = [];
   while(x < GW - 3){
     const turn = rnd();
@@ -210,7 +243,7 @@ function courseFor(rid){
     blob(x, y, rnd() < 0.15 ? 2 : 1);
     if(rnd() < 0.3) branches.push([x, y]);
   }
-  blob(GW-3, y, 1);
+  blob(GW-3, y, 2);
   for(const [bx, by] of branches){                        /* dead ends, so a horse can go wrong */
     let cx = bx, cy = by;
     const len = 2 + Math.floor(rnd() * 3);
@@ -248,7 +281,7 @@ function buildRace(rid, salt){
   const openAt = (x, y) => c.at(Math.floor(x), Math.floor(y));
   const hs = [];
   for(let i = 0; i < HORSES; i++){
-    const a = (i / HORSES) * 6.283 + rnd() * 0.9;             /* they leave the pen fanned out */
+    const a = (i - 2.5) * 0.34 + (rnd() - 0.5) * 0.5;         /* they leave the pen facing the course */
     const sp = 0.095 + rnd() * 0.04;                         /* cells per tick, constant */
     hs.push({ i, x: 2.5, y: c.goal.y + 0.5 + (i - 2.5) * 0.28,
       vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp,
@@ -559,6 +592,7 @@ function frame(){
     if(p.left > 21000) $("#call").textContent = "A new course. Six runners. First to the carrots wins.";
   } else if(p.phase === "run"){
     if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
+    if(gateRung !== p.rid && p.t < 1500){ gateRung = p.rid; sGate(); }
     $("#phase").innerHTML = `and they are off · <b>${Math.ceil(p.left/1000)}s</b> left`;
     callRace(race, p.t);
     drawRace(p.t); paintRunners(p.t);
@@ -583,7 +617,7 @@ function frame(){
   requestAnimationFrame(frame);
 }
 /* a commentary line, so it reads like a stream and not like a progress bar */
-let calledAt = 0, calledLead = -1;
+let gateRung = -1, calledAt = 0, calledLead = -1;
 function callRace(r, t){
   const now = Date.now();
   if(now - calledAt < 4000) return;
@@ -591,7 +625,7 @@ function callRace(r, t){
   const lead = rank[0][0], gap = rank[1][1] - rank[0][1], back = rank[HORSES-1][0];
   let line;
   if(t < 4000) line = `They are away. ${horseName(lead)} takes the first turn.`;
-  else if(lead !== calledLead) line = `${horseName(lead)} is in front now, past ${horseName(calledLead < 0 ? rank[1][0] : calledLead)}.`;
+  else if(lead !== calledLead){ line = `${horseName(lead)} is in front now, past ${horseName(calledLead < 0 ? rank[1][0] : calledLead)}.`; sLead(); }
   else if(rank[0][1] < 6) line = `${horseName(lead)} can see the carrots.`;
   else if(gap === 0) line = `${horseName(lead)} and ${horseName(rank[1][0])} are level.`;
   else if(gap > 8) line = `${horseName(lead)} is well clear. ${horseName(back)} is lost at the back.`;
@@ -611,7 +645,7 @@ function marginOf(r){
 }
 function settle(r){
   if(paid === r.rid) return;
-  paid = r.rid;
+  paid = r.rid; sWin();
   addHist(r.rid, r.winner);
   if(S.bet && S.bet.rid === r.rid){
     if(S.bet.h === r.winner){
@@ -632,7 +666,7 @@ $("#place").onclick = () => {
   const amt = betAmt === "all" ? Math.floor(S.pts) : Math.min(betAmt, Math.floor(S.pts));
   if(amt < 1) return toast("Watch a while to earn points.");
   S.pts -= amt; S.bet = { rid: p.rid, h: betH, amt }; save(); paint();
-  toast(fmt(amt) + " on " + horseName(betH));
+  toast(fmt(amt) + " on " + horseName(betH)); sBet();
   addPool(p.rid, betH, amt);
   bcast(`backs ${EMO[betH]} ${horseName(betH)} for ${fmt(amt)} at ${oddsFor(p.rid)[betH].toFixed(1)}x`);
 };
@@ -667,6 +701,12 @@ $("#redeem").onclick = () => {
   paint();
 };
 
+function paintSnd(){ $("#snd").textContent = sndOn ? "Sound on" : "Sound off"; }
+$("#snd").onclick = () => {
+  sndOn = !sndOn; localStorage.setItem("pd_snd", sndOn ? "1" : "0"); paintSnd();
+  if(sndOn) sGate();
+};
+paintSnd();
 $("#share").onclick = async () => {
   const url = location.origin + "/?r=" + (race ? race.rid : ridNow());
   const txt = `Penny Derby · race #${(race ? race.rid : ridNow()) % 100000} runs now. ${url}`;

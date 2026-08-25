@@ -147,6 +147,7 @@ footer a{color:var(--gold)}
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
         <button class="btn ghost" id="share">Share this race</button>
         <button class="btn ghost" id="verify">Verify this race</button>
+        <button class="btn ghost" id="back" hidden>Back to live</button>
         <button class="btn ghost" id="snd"></button>
       </div>
       <div class="sub" id="receipt"></div>
@@ -349,6 +350,8 @@ function leftOf(race, h, t){
 const ROOM = "pennyderby-1";
 let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1, hist = [];
 let board = { d: "", u: {} };   /* the day's best bettors, by name */
+let shist = [];                 /* the last salts, so an old race can be replayed and checked */
+let replay = null, wantReplay = 0;
 /* the money the room has on each horse in the race being bet on */
 let pool = { rid: -1, tot: [] };
 function send(key, value){ if(sock && sock.readyState === 1)
@@ -366,6 +369,8 @@ function connect(){
       const st = m.state || {};
       takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist); takePool(st.pool);
       takeBoard(st.board);
+      takeSHist(st.shist);
+      if(wantReplay) startReplay(wantReplay);
     } else if(m.type === "set"){
       if(m.key === "chat") takeChat(m.value);
       else if(m.key === "names") takeNames(m.value);
@@ -373,6 +378,7 @@ function connect(){
       else if(m.key === "hist") takeHist(m.value);
       else if(m.key === "pool") takePool(m.value);
       else if(m.key === "board") takeBoard(m.value);
+      else if(m.key === "shist") takeSHist(m.value);
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count;
       $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
   };
@@ -464,7 +470,7 @@ function addBoard(profit){
   send("board", board); paintBoard();
 }
 function paintBoard(){
-  const rows = Object.entries(board.d === dayKey() ? board.u : {}).sort((a,b) => b[1] - a[1]).slice(0,5);
+  const rows = Object.entries(board.d === dayKey() ? board.u : {}).sort((a,b) => b[1] - a[1]).slice(0,3);
   const mine = S.day === dayKey() ? (S.prof || 0) : 0;
   $("#myprof").textContent = mine === 0 ? "" : (mine > 0 ? "you +" + fmt(mine) : "you " + fmt(mine));
   $("#board").innerHTML = rows.length
@@ -481,11 +487,32 @@ function takeNames(v){
   }
   names = out; paint();
 }
+/* ---------- the salt history: a race stays checkable after it has run ----------
+   The room keeps the last salts, so a shared link to an old race can replay it and print the same
+   receipt. Without this a permalink is only a promise; with it, it is evidence. */
+function takeSHist(v){
+  if(!Array.isArray(v)) return;
+  for(const raw of v.slice(-60)){
+    const r = Number(raw && raw.r), sv = String((raw && raw.s) || "").slice(0,12);
+    if(!isFinite(r) || !sv) continue;
+    if(!salts[r] || sv < salts[r]) salts[r] = sv;
+  }
+  rebuildSHist();
+}
+function rebuildSHist(){
+  shist = Object.keys(salts).map(Number).sort((a,b) => a - b).slice(-40).map(r => ({ r, s: salts[r] }));
+}
+function pushSalt(rid, salt){
+  if(!salts[rid] || salt < salts[rid]) salts[rid] = salt;
+  rebuildSHist(); send("shist", shist);
+}
+
 function takeSalt(v){
   if(!v || typeof v !== "object") return;
   const rid = Number(v.rid), salt = String(v.salt || "").slice(0,12);
   if(!isFinite(rid) || !salt) return;
   if(!salts[rid] || salt < salts[rid]) salts[rid] = salt;   // lowest string wins, so everybody agrees
+  rebuildSHist();
 }
 const horseName = i => (names && names[i]) || DEFNAMES[i];
 connect();
@@ -502,7 +529,7 @@ function maybeSendSalt(rid, phase){
   setTimeout(() => {
     if(salts[rid]) return;
     const salt = Math.random().toString(36).slice(2, 10);
-    salts[rid] = salt; send("salt", { rid, salt });
+    salts[rid] = salt; send("salt", { rid, salt }); pushSalt(rid, salt);
   }, Math.random() * 500);
 }
 
@@ -621,8 +648,53 @@ function phaseOf(){
 
 /* ---------- one frame ---------- */
 let lastSec = 0;
+/* ---------- replay: any race the room has run can be watched again, and checked ----------
+   A share link carries a race number. If the room still holds that race's salt, the page rebuilds the
+   race from the number and the salt alone and plays it back. Same inputs, same race, every time. */
+function startReplay(want){
+  wantReplay = 0;
+  /* people copy the short number they see on screen, so accept either form */
+  let rid = want;
+  if(want < 1000000){
+    const m = Object.keys(salts).map(Number).filter(r => r % 100000 === want).sort((a,b) => b - a)[0];
+    if(m) rid = m;
+  }
+  const salt = salts[rid];
+  if(!salt){
+    wantReplay = want;
+    return sysline(`Race ${want % 100000} is not in the room's salt list, so I cannot replay it honestly. Only races the room has run can be replayed.`);
+  }
+  if(S.bet && S.bet.rid === ridNow()) return toast("Your bet is still running. Replay it after this race settles.");
+  replay = { rid, race: buildRace(rid, salt), t0: Date.now() };
+  race = replay.race;                      /* so the receipt below describes the replay, not the live race */
+  $("#back").hidden = false;
+  sysline(`Replay of race ${rid % 100000}. Same race number, same salt, same result.`);
+  $("#verify").click();
+}
+function endReplay(){
+  replay = null; race = null; $("#back").hidden = true;
+  sysline("Back to the live race.");
+}
+function replayFrame(){
+  const t = Date.now() - replay.t0;
+  race = replay.race;
+  if(t > RUN_MS + 4000) return endReplay();
+  const tt = Math.min(t, RUN_MS);
+  drawRace(tt); paintRunners(tt);
+  $("#rid").textContent = "#" + (replay.rid % 100000);
+  $("#phase").innerHTML = t < RUN_MS
+    ? `<b>replay</b> of race ${replay.rid % 100000} · ${Math.ceil((RUN_MS - t)/1000)}s`
+    : `<b>${horseName(replay.race.winner)}</b> won race ${replay.rid % 100000}`;
+  if(t >= RUN_MS) $("#call").textContent = `${horseName(replay.race.winner)} won it by ${marginOf(replay.race)}. Press Verify to check that.`;
+  else callRace(replay.race, tt);
+}
 function frame(){
   const p = phaseOf();
+  if(replay){
+    replayFrame();
+    $("#clock").textContent = new Date().toISOString().slice(11,19) + " UTC";
+    return requestAnimationFrame(frame);
+  }
   if(p.rid !== curRid){                                   /* a new race */
     curRid = p.rid; race = null; betH = -1;
     if(S.bet && S.bet.rid !== p.rid) S.bet = null;
@@ -783,13 +855,22 @@ $("#verify").onclick = () => {
 };
 
 $("#share").onclick = async () => {
-  const url = location.origin + "/?r=" + (race ? race.rid : ridNow());
-  const txt = `Penny Derby · race #${(race ? race.rid : ridNow()) % 100000} runs now. ${url}`;
+  const rid = replay ? replay.rid : race ? race.rid : ridNow();
+  const url = location.origin + "/?r=" + rid;
+  const txt = `Penny Derby · replay race #${rid % 100000} and check the receipt yourself. ${url}`;
   try{ await navigator.clipboard.writeText(txt); toast("Link copied. Send it to somebody."); }
   catch(e){ prompt("Copy this link", txt); }
 };
-if(new URLSearchParams(location.search).get("r"))
-  sysline("Somebody shared a race with you. The next one starts within 90 seconds.");
+$("#back").onclick = endReplay;
+{
+  const r = Number(new URLSearchParams(location.search).get("r"));
+  if(isFinite(r) && r > 0 && r !== ridNow()){
+    wantReplay = r;
+    sysline(`Somebody shared race ${r % 100000} with you. It will replay as soon as the room sends its salt.`);
+  } else if(r){
+    sysline("Somebody shared a race with you. The next one starts within 90 seconds.");
+  }
+}
 sizeCanvas();
 sysline("Welcome. A race starts every 90 seconds and everybody sees the same one.");
 sysline("Six horses run one winding course. The first three are the agents of the show.");

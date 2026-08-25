@@ -516,6 +516,7 @@ function fresh(){
     joinAsked: false,                       // the hall invitation is shown once
     theme: "",                              // chosen palette
     pk: { loop: 0, hands: 0, night: 0 },    // the vault: permanent perks bought with points
+    tick: "",                              // the day a derby ticket was already paid
     spent: 0,                               // points locked in the vault
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
@@ -769,6 +770,7 @@ function renderReinvest(){
       <div class="act"><button class="btn" id="doRe" ${gain < 1 ? "disabled":""}>
         ${gain < 1 ? "Earn more first" : "Reinvest for "+gain+" point"+(gain>1?"s":"")}</button></div>
     </div>
+    ${ticketCard()}
     <div class="card"><h3>Today's market</h3>
       <p>${MOOD.emoji} <b style="color:var(--gold3)">${MOOD.label}</b> gives ${VDEF[MOOD.v][1]} ${VDEF[MOOD.v][0]} a ${MOOD.x} times bonus. Every player sees the same market today. It changes at midnight UTC.</p>
     </div>
@@ -821,7 +823,7 @@ function renderReinvest(){
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
                      streak: G.streak, day: G.day, coachOff: true,
                      fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked,
-                     theme: G.theme };
+                     theme: G.theme, tick: G.tick };   /* a reinvest must not reset the daily ticket */
       G = Object.assign(fresh(), keep);
       sfx(...S.big); closeModal(); save(); render();
       toast("New run. +"+(gain2*2)+"% forever.");
@@ -829,6 +831,7 @@ function renderReinvest(){
     $("#no").onclick = closeModal;
   };
   vaultBind();
+  ticketBind();
   themeBind();
   $("#shareBtn").onclick = () => share(
     `I compounded one penny into ${money(G.lifetime)} in Penny Loop.`);
@@ -943,6 +946,50 @@ function renderWorld(){
   $("#wnote").textContent = (hit ? "Reached. Every player earns +25% for the rest of the day. " : "")
     + parts;
   if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
+}
+
+/* ==================== the derby ticket ====================
+   Penny Derby runs on another origin, so it cannot read this save. A ticket carries the number across
+   by hand: the day, the points won, and four check digits from the same hash both games use. One a day. */
+const dayKeyPL = () => new Date().toISOString().slice(0,10);
+const fnv = t => { let h = 2166136261; for(const c of String(t)) h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0; return h; };
+const short8 = t => ("0000000" + fnv(t).toString(16)).slice(-8);
+function readTicket(raw){
+  const t = String(raw || "").toUpperCase().replace(/\s+/g, "");
+  const m = t.match(/^PD(\d{6})-(\d{1,6})-([0-9A-F]{4})$/);
+  if(!m) return { ok: false, why: "That is not a derby ticket. It looks like PD250825-320-1A2B." };
+  const body = "PD" + m[1] + "-" + m[2];
+  if(short8(body + ":pennyloop").slice(0,4).toUpperCase() !== m[3])
+    return { ok: false, why: "The check digits do not match. Copy the ticket again." };
+  const d = "20" + m[1].slice(0,2) + "-" + m[1].slice(2,4) + "-" + m[1].slice(4,6);
+  if(d !== dayKeyPL()) return { ok: false, why: "That ticket is for " + d + ". Tickets pay on their own day only." };
+  if(G.tick === dayKeyPL()) return { ok: false, why: "One ticket a day, and today's is already paid." };
+  return { ok: true, pts: Number(m[2]), day: d };
+}
+function ticketPay(pts){
+  return Math.max(rate() * Math.min(pts, 1000) / 10, pts * 100);   /* up to 100 seconds of income */
+}
+function ticketCard(){
+  const done = G.tick === dayKeyPL();
+  return `<div class="card"><h3>Derby ticket</h3>
+    <p>Win points on <a href="https://pennyderby.games.bu.app/" target="_blank" rel="noopener">Penny Derby</a>,
+    press Cash out to Penny Loop, and paste the ticket here. It pays up to 100 seconds of your current
+    income. One ticket a day.</p>
+    <div class="kv"><span><input id="tin" maxlength="24" placeholder="PD250825-320-1A2B"
+      style="width:190px;background:#0000;border:1px solid var(--line);border-radius:8px;padding:7px 9px;color:inherit;font:inherit"></span>
+      <button class="btn ghost" id="tgo" ${done ? "disabled" : ""}>${done ? "paid today" : "Pay it in"}</button></div></div>`;
+}
+function ticketBind(){
+  const b = document.querySelector("#tgo");
+  if(!b) return;
+  b.onclick = () => {
+    const r = readTicket(document.querySelector("#tin").value);
+    if(!r.ok) return toast(r.why);
+    const pay = ticketPay(r.pts);
+    G.cash += pay; G.lifetime += pay; G.tick = dayKeyPL();
+    save(); sfx(...S.big); renderReinvest();
+    toast("The derby paid you " + money(pay) + " for " + r.pts + " points.");
+  };
 }
 
 /* ============================ the vault ============================ */

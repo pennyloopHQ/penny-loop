@@ -517,6 +517,7 @@ function fresh(){
     theme: "",                              // chosen palette
     pk: { loop: 0, hands: 0, night: 0 },    // the vault: permanent perks bought with points
     tick: "",                              // the day a derby ticket was already paid
+    bd: { d: "", taps: 0, buys: 0, earn: 0, got: [] },   // today's bounties: counters and what is paid
     spent: 0,                               // points locked in the vault
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
@@ -577,12 +578,12 @@ const mulOf = i => {
   let m = 1;
   for(const u of UPG) if(G.up[u.id] && (u.kind==="g" || (u.kind==="v" && u.v===i))) m *= u.x;
   if(i === MOOD.v) m *= MOOD.x;
-  return m * (1 + cpFree() * 0.02) * (1 + 0.12 * G.pk.loop) * achMul() * wMul() * streakMul();
+  return m * (1 + cpFree() * 0.02) * (1 + 0.12 * G.pk.loop) * achMul() * wMul() * streakMul() * bdMul();
 };
 const tapMul = () => {
   let m = 1;
   for(const u of UPG) if(G.up[u.id] && u.kind==="t") m *= u.x;
-  return m * (1 + cpFree() * 0.02) * (1 + 0.30 * G.pk.hands) * achMul() * wMul() * streakMul();
+  return m * (1 + cpFree() * 0.02) * (1 + 0.30 * G.pk.hands) * achMul() * wMul() * streakMul() * bdMul();
 };
 const offHours = () => 4 + (G.up.o1 ? 4 : 0) + (G.up.o2 ? 4 : 0) + (G.up.o3 ? 12 : 0) + 2 * G.pk.night;
 const cycleRev = i => VDEF[i][4] * G.n[i] * mulOf(i);
@@ -667,6 +668,7 @@ function startCycle(i, ev){
 function collect(i){
   const got = cycleRev(i);
   G.cash += got; G.lifetime += got;
+  bdRoll_check(); G.bd.earn += got;
   const c = cards[i].root.getBoundingClientRect();
   if(c.top > -40 && c.top < innerHeight) pop("+"+money(got), c.left + c.width - 46, c.top + 8);
   sfx(...S.coin);
@@ -675,6 +677,7 @@ function buy(i){
   const k = amtOf(i), c = costMany(i,k);
   if(G.cash < c){ toast("Not enough cash for "+k+"x "+VDEF[i][0]); return; }
   G.cash -= c; G.n[i] += k; sfx(...S.buy);
+  bdRoll_check(); G.bd.buys += k;
   const r = cards[i].buy.getBoundingClientRect();
   sparks(r.left + r.width/2, r.top + r.height/2, 6);
   if(G.n[i] === k) toast(VDEF[i][0]+" opened. Tap its icon to run a shift.");
@@ -770,6 +773,7 @@ function renderReinvest(){
       <div class="act"><button class="btn" id="doRe" ${gain < 1 ? "disabled":""}>
         ${gain < 1 ? "Earn more first" : "Reinvest for "+gain+" point"+(gain>1?"s":"")}</button></div>
     </div>
+    ${bountyCard()}
     ${ticketCard()}
     <div class="card"><h3>Today's market</h3>
       <p>${MOOD.emoji} <b style="color:var(--gold3)">${MOOD.label}</b> gives ${VDEF[MOOD.v][1]} ${VDEF[MOOD.v][0]} a ${MOOD.x} times bonus. Every player sees the same market today. It changes at midnight UTC.</p>
@@ -823,7 +827,7 @@ function renderReinvest(){
                      uid: G.uid, name: G.name, ach: G.ach, q: G.q,
                      streak: G.streak, day: G.day, coachOff: true,
                      fv: G.fv, fvD: G.fvD, joinAsked: G.joinAsked,
-                     theme: G.theme, tick: G.tick };   /* a reinvest must not reset the daily ticket */
+                     theme: G.theme, tick: G.tick, bd: G.bd };   /* a reinvest keeps the daily ticket and bounties */
       G = Object.assign(fresh(), keep);
       sfx(...S.big); closeModal(); save(); render();
       toast("New run. +"+(gain2*2)+"% forever.");
@@ -946,6 +950,51 @@ function renderWorld(){
   $("#wnote").textContent = (hit ? "Reached. Every player earns +25% for the rest of the day. " : "")
     + parts;
   if(hit && !wHit){ wHit = true; sfx(...S.big); toast("World goal reached. +25% for everyone today."); }
+}
+
+/* ==================== daily bounties ====================
+   Three goals a day, the same three for every player, taken from the day itself. They reset at
+   midnight UTC. Finish all three and every penny earns 5 percent more for the rest of the day. */
+const BOUNTY = [
+  ["taps",  n => `Work the counter ${n} times`,     n => (G.bd.taps || 0) / n, [40, 60, 80, 120]],
+  ["buys",  n => `Buy ${n} venture units`,          n => (G.bd.buys || 0) / n, [25, 40, 60, 100]],
+  ["earn",  n => `Earn ${n} seconds of your income`, n => (G.bd.earn || 0) / Math.max(1, rate() * n), [30, 60, 90, 120]]
+];
+function bdRoll(){
+  const d = today();
+  let h = 2166136261;
+  for(const c of d + "bounty") h = (h ^ c.charCodeAt(0)) * 16777619 >>> 0;
+  return BOUNTY.map(([k, , , opts], i) => [k, opts[(h >>> (i * 5)) % opts.length]]);
+}
+let BD = bdRoll();
+function bdRoll_check(){
+  if(G.bd.d !== today()){ G.bd = { d: today(), taps: 0, buys: 0, earn: 0, got: [] }; BD = bdRoll(); }
+}
+const bdProg = i => Math.min(1, BOUNTY[i][2](BD[i][1]) || 0);
+const bdAll = () => G.bd.d === today() && G.bd.got.length === BOUNTY.length;
+const bdMul = () => bdAll() ? 1.05 : 1;
+function bdPay(i){
+  const pay = Math.max(rate() * 120, 1000);
+  G.cash += pay; G.lifetime += pay; G.bd.got.push(BD[i][0]);
+  sfx(...S.big); save();
+  toast("Bounty done: " + BOUNTY[i][1](BD[i][1]) + "  +" + money(pay));
+  if(bdAll()) toast("All three bounties. Every penny earns 5 percent more today.");
+}
+function bdCheck(){
+  bdRoll_check();
+  for(let i = 0; i < BOUNTY.length; i++)
+    if(!G.bd.got.includes(BD[i][0]) && bdProg(i) >= 1) bdPay(i);
+}
+function bountyCard(){
+  bdRoll_check();
+  return `<div class="card"><h3>Today's bounties</h3>
+    <p>Three goals, the same three for every player today. They reset at midnight UTC. Finish all three
+    and every penny earns 5 percent more for the rest of the day.${bdAll() ? " <b style=\"color:var(--gold3)\">Running now.</b>" : ""}</p>
+    ${BOUNTY.map((b, i) => {
+      const done = G.bd.got.includes(b[0]), pc = Math.round(bdProg(i) * 100);
+      return `<div class="kv"><span>${b[1](BD[i][1])}</span>
+        <b style="color:${done ? "var(--gold3)" : "inherit"}">${done ? "paid" : pc + "%"}</b></div>`;
+    }).join("")}</div>`;
 }
 
 /* ==================== the derby ticket ====================
@@ -1522,6 +1571,7 @@ $("#cx").onclick = () => {
 $("#tap").onclick = e => {
   const pay = tapPay();
   G.cash += pay; G.lifetime += pay; G.taps++;
+  bdRoll_check(); G.bd.taps++; G.bd.earn += pay;
   sfx(...S.tap);
   const r = e.currentTarget.getBoundingClientRect();
   pop("+"+money(pay), r.left + r.width/2, r.top - 6);
@@ -1645,7 +1695,7 @@ function frame(now){
     if(G.hist.length > 90) G.hist.splice(0, G.hist.length - 90);
   }
   acc += dt; saveAcc += dt;
-  if(acc >= 0.1){ acc = 0; checkQuests(); checkAch(); render(); askJoin(); }
+  if(acc >= 0.1){ acc = 0; checkQuests(); bdCheck(); checkAch(); render(); askJoin(); }
   if(saveAcc >= 5){ saveAcc = 0; save(); }
   requestAnimationFrame(frame);
 }

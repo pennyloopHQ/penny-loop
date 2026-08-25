@@ -518,6 +518,7 @@ function fresh(){
     pk: { loop: 0, hands: 0, night: 0 },    // the vault: permanent perks bought with points
     tick: "",                              // the day a derby ticket was already paid
     bd: { d: "", taps: 0, buys: 0, earn: 0, got: [] },   // today's bounties: counters and what is paid
+    bank: { amt: 0, at: 0 },                // the bank: cash locked, and when the term ends
     spent: 0,                               // points locked in the vault
     uid: Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-3),
     name: "",
@@ -774,6 +775,7 @@ function renderReinvest(){
         ${gain < 1 ? "Earn more first" : "Reinvest for "+gain+" point"+(gain>1?"s":"")}</button></div>
     </div>
     ${bountyCard()}
+    ${bankCard()}
     ${ticketCard()}
     <div class="card"><h3>Today's market</h3>
       <p>${MOOD.emoji} <b style="color:var(--gold3)">${MOOD.label}</b> gives ${VDEF[MOOD.v][1]} ${VDEF[MOOD.v][0]} a ${MOOD.x} times bonus. Every player sees the same market today. It changes at midnight UTC.</p>
@@ -835,6 +837,7 @@ function renderReinvest(){
     $("#no").onclick = closeModal;
   };
   vaultBind();
+  bankBind();
   ticketBind();
   themeBind();
   $("#shareBtn").onclick = () => share(
@@ -1018,6 +1021,66 @@ function readTicket(raw){
 function ticketPay(pts){
   return Math.max(rate() * Math.min(pts, 1000) / 10, pts * 100);   /* up to 100 seconds of income */
 }
+/* ============================ the bank ============================
+   Two players voted for the next feature yesterday and it finished one to one, a bank against a skin.
+   The bank is the better game, so the bank is built first. Lock cash for 60 seconds and it comes back
+   8 percent bigger. Locked cash cannot buy anything, which is the whole decision. */
+const BANK_MS = 60000, BANK_RATE = 0.08;
+function bankLeft(){ return Math.max(0, (G.bank.at || 0) - Date.now()); }
+function bankDue(){ return G.bank.amt > 0 && bankLeft() === 0; }
+function bankCard(){
+  const b = G.bank, has = b.amt > 0;
+  const line = !has ? `<div class="kv"><span>nothing locked</span><b>${money(G.cash)} free</b></div>`
+    : bankDue()
+      ? `<div class="kv"><span>term finished</span><b style="color:var(--gold3)">${money(b.amt * (1 + BANK_RATE))} waiting</b></div>`
+      : `<div class="kv"><span>${money(b.amt)} locked</span><b>${Math.ceil(bankLeft()/1000)}s left</b></div>`;
+  return `<div class="card"><h3>The bank</h3>
+    <p>Lock cash for 60 seconds and the bank pays it back 8 percent bigger. Locked cash cannot buy a
+    unit or a manager while the term runs. Interest is paid once, not compounded, so a large empire
+    still earns more from a shift than from the bank. A reinvest closes the account, so collect first.</p>
+    <div id="bankLine">${line}</div>
+    <div class="act">
+      <button class="btn ghost" id="bhalf" ${has || G.cash < 1 ? "disabled" : ""}>Lock half</button>
+      <button class="btn ghost" id="ball" ${has || G.cash < 1 ? "disabled" : ""}>Lock it all</button>
+      <button class="btn" id="bget" ${bankDue() ? "" : "disabled"}>${
+        bankDue() ? "Collect " + money(G.bank.amt * (1 + BANK_RATE)) : "Collect"}</button>
+    </div></div>`;
+}
+function bankBind(){
+  const lock = part => {
+    if(G.bank.amt > 0) return toast("One term at a time. Collect the last one first.");
+    const amt = Math.floor(G.cash * part);
+    if(amt < 1) return toast("There is nothing to lock yet.");
+    G.cash -= amt; G.bank = { amt, at: Date.now() + BANK_MS };
+    sfx(...S.buy); save(); renderReinvest();
+    toast(money(amt) + " locked. It comes back in 60 seconds.");
+  };
+  const h = document.querySelector("#bhalf"), a = document.querySelector("#ball"),
+        g = document.querySelector("#bget");
+  if(h) h.onclick = () => lock(0.5);
+  if(a) a.onclick = () => lock(1);
+  if(g) g.onclick = () => {
+    if(!bankDue()) return;
+    const pay = G.bank.amt * (1 + BANK_RATE);
+    G.cash += pay; G.lifetime += pay * BANK_RATE / (1 + BANK_RATE);  /* only the interest is new money */
+    bdRoll_check(); G.bd.earn += pay * BANK_RATE / (1 + BANK_RATE);
+    G.bank = { amt: 0, at: 0 };
+    sfx(...S.big); save(); renderReinvest();
+    toast("The bank paid you " + money(pay) + ".");
+  };
+}
+/* The card counts itself down. Only the one line and the collect button change, because a full
+   re-render would wipe whatever the player is typing into the derby ticket box. */
+setInterval(() => {
+  const line = document.querySelector("#bankLine");
+  if(!line || G.bank.amt <= 0) return;
+  line.innerHTML = bankDue()
+    ? `<div class="kv"><span>term finished</span><b style="color:var(--gold3)">${money(G.bank.amt * (1 + BANK_RATE))} waiting</b></div>`
+    : `<div class="kv"><span>${money(G.bank.amt)} locked</span><b>${Math.ceil(bankLeft()/1000)}s left</b></div>`;
+  const g = document.querySelector("#bget");
+  if(g){ g.disabled = !bankDue();
+    g.textContent = bankDue() ? "Collect " + money(G.bank.amt * (1 + BANK_RATE)) : "Collect"; }
+}, 1000);
 function ticketCard(){
   const done = G.tick === dayKeyPL();
   return `<div class="card"><h3>Derby ticket</h3>
@@ -1499,6 +1562,9 @@ const LOG = [
   ["h22","A stronger honesty check on the hall and the world goal"],
   ["h24","Penny Derby, a live race every 90 seconds, at pennyderby.games.bu.app"],
   ["h25","The vault: lock a compound point, buy a permanent perk. The second half of the player vote"],
+  ["h34","The derby ticket: win points on Penny Derby and cash them into this empire, once a day"],
+  ["h36","Three daily bounties, the same three for every player, +5% income when all three are done"],
+  ["h41","The bank: lock cash for 60 seconds and get 8 percent more back. Yesterday's player vote"],
 ];
 const VOTE_URL = "https://x.com/Alezander9/status/2091693365452841460";
 const POLL_ENDS = Date.parse("2026-08-25T01:30:00Z");

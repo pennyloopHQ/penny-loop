@@ -148,6 +148,7 @@ footer a{color:var(--gold)}
         <button class="btn ghost" id="share">Share this race</button>
         <button class="btn ghost" id="verify">Verify this race</button>
         <button class="btn ghost" id="back" hidden>Back to live</button>
+        <button class="btn ghost" id="cash">Cash out to Penny Loop</button>
         <button class="btn ghost" id="snd"></button>
       </div>
       <div class="sub" id="receipt"></div>
@@ -458,11 +459,14 @@ function takeBoard(v){
   paintBoard();
 }
 /* my own profit for the day, so the board is not the only number that moves */
+function rollDay(){ if(S.day !== dayKey()){ S.day = dayKey(); S.prof = 0; S.gwin = 0; } }
 function dayProfit(delta){
-  if(S.day !== dayKey()){ S.day = dayKey(); S.prof = 0; }
+  rollDay();
   S.prof = (S.prof || 0) + delta;
   save(); paintBoard(); return S.prof;
 }
+/* what you won today, before your losses. A ticket pays on winnings, so one good race is enough. */
+function dayWin(win){ rollDay(); S.gwin = (S.gwin || 0) + win; save(); return S.gwin; }
 function addBoard(profit){
   if(!(profit > 0)) return;
   if(board.d !== dayKey()) board = { d: dayKey(), u: {} };
@@ -768,6 +772,7 @@ function settle(r){
     if(S.bet.h === r.winner){
       const win = Math.round(S.bet.amt * oddsFor(r.rid)[S.bet.h]);
       S.pts += win; S.won++;
+      dayWin(win);
       addBoard(dayProfit(win - S.bet.amt));
       toast("You win " + fmt(win) + " points.");
       bcast(`wins ${fmt(win)} points on ${horseName(r.winner)}.`);
@@ -854,12 +859,43 @@ $("#verify").onclick = () => {
   sysline(`${S.name} verified race ${race.rid % 100000}: ${same ? "same winner" : "MISMATCH"} (${d}).`);
 };
 
-$("#share").onclick = async () => {
+/* ---------- cash out: the derby pays into the tycoon game ----------
+   The two games are separate origins, so they cannot read each other. A ticket carries the number
+   across by hand. It holds the day, the points, and a check digit, so a typo cannot become money. */
+/* Copying must never block the page. A clipboard write on an unfocused tab can hang for ever, so this
+   checks focus first, never awaits on the critical path, and always shows the text as a fallback. */
+function copySoft(txt){
+  try{
+    if(document.hasFocus() && navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(() => toast("Copied."), () => {});
+      return;
+    }
+  }catch(e){}
+  toast("Select the text above and copy it.");
+}
+function ticketFor(pts){
+  const d = dayKey().replace(/-/g,"").slice(2);            /* yymmdd */
+  const body = "PD" + d + "-" + pts;
+  return body + "-" + shortHash(body + ":pennyloop").slice(0,4).toUpperCase();
+}
+$("#cash").onclick = () => {
+  const won = S.day === dayKey() ? Math.floor(S.gwin || 0) : 0;
+  if(won < 25) return toast("Win a race first. A ticket needs 25 points of winnings today.");
+  const t = ticketFor(Math.min(won, 100000));
+  const e = $("#receipt");
+  e.innerHTML = `<b>Ticket ${t}</b><br>`
+    + `${fmt(won)} points won today. Paste this into Penny Loop, on the Reinvest page, and it pays cash there.<br>`
+    + `One ticket a day. The check digits stop a typo from paying out.`;
+  copySoft(t);
+  sysline(`${S.name} cashed out ${fmt(won)} points of winnings to Penny Loop.`);
+};
+
+$("#share").onclick = () => {
   const rid = replay ? replay.rid : race ? race.rid : ridNow();
   const url = location.origin + "/?r=" + rid;
   const txt = `Penny Derby · replay race #${rid % 100000} and check the receipt yourself. ${url}`;
-  try{ await navigator.clipboard.writeText(txt); toast("Link copied. Send it to somebody."); }
-  catch(e){ prompt("Copy this link", txt); }
+  $("#receipt").innerHTML = `<b>Share this race</b><br>${txt}`;
+  copySoft(txt);
 };
 $("#back").onclick = endReplay;
 {

@@ -400,24 +400,20 @@ function connect(){
   s.onerror = () => { live = false; paint(); };
   s.onmessage = ev => {
     let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+    /* One bad key must not stop the others: each part of the state is taken on its own. */
+    const step = f => { try{ f(); }catch(e){} };
     if(m.type === "welcome"){
       const st = m.state || {};
-      takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist); takePool(st.pool);
-      takeBoard(st.board);
-      takeSHist(st.shist);
-      takeMods(st.mods);
-      if(wantReplay) startReplay(wantReplay);
+      step(() => takeChat(st.chat)); step(() => takeNames(st.names)); step(() => takeSalt(st.salt));
+      step(() => takeHist(st.hist)); step(() => takePool(st.pool)); step(() => takeBoard(st.board));
+      step(() => takeSHist(st.shist)); step(() => takeMods(st.mods));
+      if(wantReplay) step(() => startReplay(wantReplay));
     } else if(m.type === "set"){
-      if(m.key === "chat") takeChat(m.value);
-      else if(m.key === "names") takeNames(m.value);
-      else if(m.key === "salt") takeSalt(m.value);
-      else if(m.key === "hist") takeHist(m.value);
-      else if(m.key === "pool") takePool(m.value);
-      else if(m.key === "board") takeBoard(m.value);
-      else if(m.key === "shist") takeSHist(m.value);
-      else if(m.key === "mods") takeMods(m.value);
+      const take = { chat: takeChat, names: takeNames, salt: takeSalt, hist: takeHist,
+                     pool: takePool, board: takeBoard, shist: takeSHist, mods: takeMods }[m.key];
+      if(take) step(() => take(m.value));
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count;
-      $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
+      if(!STATS) $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
   };
 }
 function takeChat(v){
@@ -1013,6 +1009,8 @@ function statsHtml(){
         <div class="tr"><span>last race</span><b>${today.length ? hhmm(last) + " UTC" : "—"}</b></div>
         <div class="tr"><span>salts kept for replay</span><b>${salts}</b></div>
         <div class="tr"><span>watching right now</span><b>${heads}</b></div>
+        <p class="sub">A race is recorded only while at least one screen watches. Gaps in the day are
+          hours when the room was empty, not races that were hidden.</p>
       </div>
       <div class="box"><h2>Wins today</h2>
         ${wins.map(([i,v]) => `<div class="tr"><span>${EMO[i]} ${horseName(i)}</span><b>${v}</b></div>`).join("")}
@@ -1030,23 +1028,6 @@ function statsHtml(){
     <p class="sub">Built in public by <a href="https://x.com/pennyloopHQ">@pennyloopHQ</a> ·
       <a href="/">the live race</a> · <a href="https://github.com/pennyloopHQ/penny-loop">source</a></p>
   </div>`;
-}
-if(STATS){
-  document.body.innerHTML = statsHtml();
-  const st = document.createElement("style");
-  st.textContent = `body{padding:18px 22px}.st h1{font-size:22px;margin-bottom:2px}
-    .st .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0}
-    .st .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 13px}
-    .st .box.wide{grid-column:1/-1}
-    .st h2{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
-    .st .tr{display:flex;justify-content:space-between;gap:10px;padding:3.5px 0;border-top:1px solid var(--line);font-size:13.5px}
-    .st .tr:first-of-type{border-top:0}
-    .st .strip{font-size:24px;letter-spacing:2px;line-height:1.5}
-    .st .strip a{text-decoration:none}
-    .st .strip sup{font-size:11px;color:var(--gold3);letter-spacing:0}
-    .st code{color:var(--gold3)}`;
-  document.head.appendChild(st);
-  setInterval(() => { document.querySelector(".st").outerHTML = statsHtml(); }, 5000);
 }
 $("#patch").onclick = () => buyMod("c2");
 paintMods();
@@ -1068,6 +1049,25 @@ paint();
 paintTally();
 paintBoard();
 requestAnimationFrame(frame);
+/* Last, because it replaces the whole page: the game must finish starting first,
+   so the room socket is live and the state it sends lands in the same variables. */
+if(STATS){
+  document.body.innerHTML = statsHtml();
+  const st = document.createElement("style");
+  st.textContent = `body{padding:18px 22px}.st h1{font-size:22px;margin-bottom:2px}
+    .st .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:14px 0}
+    .st .box{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 13px}
+    .st .box.wide{grid-column:1/-1}
+    .st h2{font-size:11px;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+    .st .tr{display:flex;justify-content:space-between;gap:10px;padding:3.5px 0;border-top:1px solid var(--line);font-size:13.5px}
+    .st .tr:first-of-type{border-top:0}
+    .st .strip{font-size:24px;letter-spacing:2px;line-height:1.5}
+    .st .strip a{text-decoration:none}
+    .st .strip sup{font-size:11px;color:var(--gold3);letter-spacing:0}
+    .st code{color:var(--gold3)}`;
+  document.head.appendChild(st);
+  setInterval(() => { document.querySelector(".st").outerHTML = statsHtml(); }, 5000);
+}
 </script>
 </body>
 </html>

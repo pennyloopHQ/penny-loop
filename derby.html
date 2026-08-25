@@ -145,12 +145,14 @@ footer a{color:var(--gold)}
       </div>
       <div class="row">
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
+        <button class="btn ghost" id="patch">Carrot patch · 150 points</button>
         <button class="btn ghost" id="share">Share this race</button>
         <button class="btn ghost" id="verify">Verify this race</button>
         <button class="btn ghost" id="back" hidden>Back to live</button>
         <button class="btn ghost" id="cash">Cash out to Penny Loop</button>
         <button class="btn ghost" id="snd"></button>
       </div>
+      <div class="sub" id="mods"></div>
       <div class="sub" id="receipt"></div>
       <div class="tally">
         <h2 style="margin-top:10px"><span>Wins today</span></h2>
@@ -282,9 +284,33 @@ const getCourse = rid => (courseCache[rid] = courseCache[rid] || courseFor(rid))
    The horses move like the DVD logo: a constant speed, a straight line, and a reflection off every
    wall. A bounce adds a little turn, so the path through the course is strange and unpredictable,
    which is the whole charm of the original. */
-function buildRace(rid, salt){
+/* The second carrot patch sits at the open cell about halfway along the course by walking distance.
+   It comes from the course itself, so every screen puts it in the same place with no extra agreement. */
+function secondGoal(c){
+  let max = 0;
+  for(let i = 0; i < c.dist.length; i++) if(c.open[i] && c.dist[i] > max) max = c.dist[i];
+  const want = max * 0.55;
+  let best = -1, bd = 1e9;
+  for(let i = 0; i < c.dist.length; i++){
+    if(!c.open[i] || c.dist[i] < 0) continue;
+    const d = Math.abs(c.dist[i] - want);
+    if(d < bd){ bd = d; best = i; }
+  }
+  return { x: best % GW, y: Math.floor(best / GW) };
+}
+function buildRace(rid, salt, mstr){
   const c = getCourse(rid);
-  const rnd = mulberry(hash(rid + ":" + (salt || "")));
+  const m = String(mstr || "");
+  const rnd = mulberry(hash(rid + ":" + (salt || "") + (m ? ":" + m : "")));
+  /* A carrot patch is bought by the room before the gate. It is an input to the race, like the salt,
+     so the race stays a pure function and the receipt still proves it. */
+  const goals = [c.goal].concat(m.includes("c2") ? [secondGoal(c)] : []);
+  const nearest = (x, y) => {
+    let best = goals[0], bd = 1e9;
+    for(const g of goals){ const dx = x - (g.x+0.5), dy = y - (g.y+0.5), d = dx*dx + dy*dy;
+      if(d < bd){ bd = d; best = g; } }
+    return { g: best, d2: bd };
+  };
   const steps = Math.floor(RUN_MS / STEP);
   const openAt = (x, y) => c.at(Math.floor(x), Math.floor(y));
   const hs = [];
@@ -307,7 +333,8 @@ function buildRace(rid, salt){
         if(hit){                       /* a bounce turns the horse a little, and it smells carrots */
           h.hits++; h.recent += 3;
           let th = Math.atan2(h.vy, h.vx) + (rnd() - 0.5) * 0.6;
-          const gth = Math.atan2(c.goal.y + 0.5 - h.y, c.goal.x + 0.5 - h.x);
+          const ng = nearest(h.x, h.y).g;
+          const gth = Math.atan2(ng.y + 0.5 - h.y, ng.x + 0.5 - h.x);
           let d = ((gth - th + 9.4248) % 6.2832) - 3.1416;
           th += d * 0.18;                                     /* a small pull toward the carrots */
           if(h.recent > 9){                                   /* stuck in a corner: pick a new way */
@@ -317,8 +344,7 @@ function buildRace(rid, salt){
         }
         if(h.recent > 0) h.recent -= 0.35;
         h.x = nx; h.y = ny;
-        const dx = h.x - (c.goal.x + 0.5), dy = h.y - (c.goal.y + 0.5);
-        if(dx*dx + dy*dy < goalR*goalR){ h.done = t; if(first === undefined) first = h.i; }
+        if(nearest(h.x, h.y).d2 < goalR*goalR){ h.done = t; if(first === undefined) first = h.i; }
       }
       h.path[t*2] = h.x; h.path[t*2+1] = h.y;
     }
@@ -331,7 +357,7 @@ function buildRace(rid, salt){
   const order = rank.map(h => h.i);
   /* the odds are published from the "form" seed before the gate, so they never move */
   const odds = hs.map(h => clamp(Math.round((2 + (0.12 - h.sp) * 40 + rnd() * 4) * 10) / 10, 1.6, 14));
-  return { rid, salt: salt || "", c, hs, steps, order, odds, winner, first };
+  return { rid, salt: salt || "", mods: m, goals, c, hs, steps, order, odds, winner, first };
 }
 /* where a horse is at t ms into the run, in grid coordinates */
 function posOf(race, h, t){
@@ -352,6 +378,7 @@ const ROOM = "pennyderby-1";
 let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1, hist = [];
 let board = { d: "", u: {} };   /* the day's best bettors, by name */
 let shist = [];                 /* the last salts, so an old race can be replayed and checked */
+let mods = { rid: 0, list: [] };  /* what the room bought for this race, before the gate */
 let replay = null, wantReplay = 0;
 /* the money the room has on each horse in the race being bet on */
 let pool = { rid: -1, tot: [] };
@@ -371,6 +398,7 @@ function connect(){
       takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist); takePool(st.pool);
       takeBoard(st.board);
       takeSHist(st.shist);
+      takeMods(st.mods);
       if(wantReplay) startReplay(wantReplay);
     } else if(m.type === "set"){
       if(m.key === "chat") takeChat(m.value);
@@ -380,6 +408,7 @@ function connect(){
       else if(m.key === "pool") takePool(m.value);
       else if(m.key === "board") takeBoard(m.value);
       else if(m.key === "shist") takeSHist(m.value);
+      else if(m.key === "mods") takeMods(m.value);
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count;
       $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
   };
@@ -503,6 +532,34 @@ function takeSHist(v){
   }
   rebuildSHist();
 }
+/* Only the race that is still taking bets can be changed, and only by the three known redeems, so a
+   late message cannot alter a race that is already running. */
+const MODS = { c2: "a second carrot patch" };
+function modStr(){ return mods.rid === ridNow() ? mods.list.slice().sort().join("+") : ""; }
+function takeMods(v){
+  if(!v || typeof v !== "object") return;
+  const rid = Number(v.rid);
+  if(rid !== ridNow() || phaseOf().phase !== "bet") return;
+  const list = (Array.isArray(v.list) ? v.list : []).filter(k => MODS[k]).slice(0, 3);
+  if(mods.rid !== rid) mods = { rid, list: [] };
+  for(const k of list) if(!mods.list.includes(k)) mods.list.push(k);
+  paintMods();
+}
+function buyMod(k){
+  const rid = ridNow();
+  if(phaseOf().phase !== "bet") return toast("Only before the gate. The next window opens in a moment.");
+  if(mods.rid !== rid) mods = { rid, list: [] };
+  if(mods.list.includes(k)) return toast("The room already bought that for this race.");
+  if(S.pts < 150) return toast("A carrot patch costs 150 points. You have " + fmt(S.pts) + ".");
+  S.pts -= 150; save();
+  mods.list.push(k); send("mods", mods); paintMods(); paint();
+  bcast(`buys ${MODS[k]} for this race.`);
+  sysline(`${S.name} bought ${MODS[k]}. Every screen runs the new race.`);
+}
+function paintMods(){
+  const m = modStr();
+  $("#mods").textContent = m ? "this race: " + m.split("+").map(k => MODS[k]).join(", ") : "";
+}
 function rebuildSHist(){
   shist = Object.keys(salts).map(Number).sort((a,b) => a - b).slice(-40).map(r => ({ r, s: salts[r] }));
 }
@@ -565,8 +622,8 @@ function drawCourse(){
     g.beginPath(); g.arc((x+0.5)*TILE, (y+0.5)*TILE, TILE*0.8, 0, 7); g.fill();
   }
   g.font = Math.round(TILE*1.6) + "px serif"; g.textAlign = "center"; g.textBaseline = "middle";
-  g.fillText("\u{1F955}", (race.c.goal.x+0.5)*TILE, (race.c.goal.y+0.5)*TILE);
-  courseBmp = c; courseRid = race.rid;
+  for(const gl of race.goals) g.fillText("\u{1F955}", (gl.x+0.5)*TILE, (gl.y+0.5)*TILE);
+  courseBmp = c; courseRid = race.rid + ":" + race.mods;
 }
 function drawRace(t){
   if(!race) return;
@@ -576,7 +633,7 @@ function drawRace(t){
     const box = cv.clientWidth + "x" + cv.clientHeight;
     if(box !== lastBox){ lastBox = box; sizeCanvas(); }
   }
-  if(!courseBmp || courseRid !== race.rid) drawCourse();
+  if(!courseBmp || courseRid !== race.rid + ":" + race.mods) drawCourse();
   ctx.drawImage(courseBmp, offX, offY, CELL * GW, CELL * GH);
   const done = phaseOf().phase === "done";
   const tt = Math.min(race.steps - 1, Math.floor(clamp(t / RUN_MS, 0, 1) * (race.steps - 1)));
@@ -706,19 +763,20 @@ function frame(){
   }
   maybeSendSalt(p.rid, p.phase);
   const salt = saltFor(p.rid);
+  const mstr = modStr();
   if(p.phase === "bet"){
-    if(!race) { race = buildRace(p.rid, "form"); paint(); }
+    if(!race || race.mods !== mstr) { race = buildRace(p.rid, "form", mstr); paint(); }
     drawRace(0); paintRunners(0);
     $("#phase").innerHTML = `betting open · <b>${Math.ceil(p.left/1000)}s</b> to the gate`;
     if(p.left > 21000) $("#call").textContent = "A new course. Six runners. First to the carrots wins.";
   } else if(p.phase === "run"){
-    if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
+    if(!race || race.salt !== salt || race.mods !== mstr) { race = buildRace(p.rid, salt, mstr); paint(); }
     if(gateRung !== p.rid && p.t < 1500){ gateRung = p.rid; sGate(); }
     $("#phase").innerHTML = `and they are off · <b>${Math.ceil(p.left/1000)}s</b> left`;
     callRace(race, p.t);
     drawRace(p.t); paintRunners(p.t);
   } else {
-    if(!race || race.salt !== salt) { race = buildRace(p.rid, salt); paint(); }
+    if(!race || race.salt !== salt || race.mods !== mstr) { race = buildRace(p.rid, salt, mstr); paint(); }
     drawRace(RUN_MS); paintRunners(RUN_MS);
     $("#phase").innerHTML = `<b>${horseName(race.winner)}</b> wins · next race in ${Math.ceil(p.left/1000)}s`;
     $("#call").textContent = `${horseName(race.winner)} wins it by ${marginOf(race)}${AGENTS[race.winner] ? ", for " + AGENTS[race.winner] : ""}.`;
@@ -837,7 +895,7 @@ paintSnd();
    The race is a pure function of the race id and the salt the room agreed at the gate. So the page
    can run the whole race again, in front of you, and show that it lands on the same result. */
 function digest(r){
-  return r.hs.map(h => h.i + ":" + h.done).join("|") + "#" + r.winner;
+  return r.hs.map(h => h.i + ":" + h.done).join("|") + "#" + r.winner + "@" + (r.mods || "-");
 }
 function shortHash(s){ return ("0000000" + hash(s).toString(16)).slice(-8); }
 $("#verify").onclick = () => {
@@ -847,14 +905,14 @@ $("#verify").onclick = () => {
     e.innerHTML = "The salt does not exist yet. That is the point: until the gate opens, nobody can compute this race. Press Verify again after the finish.";
     return;
   }
-  const again = buildRace(race.rid, race.salt);
+  const again = buildRace(race.rid, race.salt, race.mods);
   const same = digest(again) === digest(race);
   const d = shortHash(digest(again));
   e.innerHTML = `<b>Receipt for race ${race.rid % 100000}</b><br>`
-    + `salt agreed by the room: <b>${race.salt}</b><br>`
+    + `salt agreed by the room: <b>${race.salt}</b>${race.mods ? ` · room bought: <b>${race.mods}</b>` : ""}<br>`
     + `winner: <b>${horseName(race.winner)}</b> · every finish position: <b>${d}</b><br>`
     + (same
-        ? `Recomputed from the id and the salt alone: <b>same race, same winner</b>. Your screen did not decide this, and neither did mine.`
+        ? `Recomputed from the race number, the salt${race.mods ? " and what the room bought" : ""}: <b>same race, same winner</b>. Your screen did not decide this, and neither did mine.`
         : `<b>Mismatch.</b> Tell @pennyloopHQ the race id and this receipt. A mismatch is a bug and I will publish it.`);
   sysline(`${S.name} verified race ${race.rid % 100000}: ${same ? "same winner" : "MISMATCH"} (${d}).`);
 };
@@ -897,6 +955,8 @@ $("#share").onclick = () => {
   $("#receipt").innerHTML = `<b>Share this race</b><br>${txt}`;
   copySoft(txt);
 };
+$("#patch").onclick = () => buyMod("c2");
+paintMods();
 $("#back").onclick = endReplay;
 {
   const r = Number(new URLSearchParams(location.search).get("r"));

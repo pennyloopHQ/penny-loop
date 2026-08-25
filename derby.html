@@ -154,6 +154,8 @@ footer a{color:var(--gold)}
         <h2 style="margin-top:10px"><span>Wins today</span></h2>
         <div id="tally"></div>
         <div class="sub" id="recent" style="margin-top:6px"></div>
+        <h2 style="margin-top:10px"><span>Best today</span><span class="t" id="myprof"></span></h2>
+        <div id="board"></div>
       </div>
     </div>
   </main>
@@ -346,6 +348,7 @@ function leftOf(race, h, t){
 /* ---------- the shared room: chat, the salt, the horse names, the head count ---------- */
 const ROOM = "pennyderby-1";
 let sock = null, live = false, chat = [], names = null, salts = {}, heads = 1, hist = [];
+let board = { d: "", u: {} };   /* the day's best bettors, by name */
 /* the money the room has on each horse in the race being bet on */
 let pool = { rid: -1, tot: [] };
 function send(key, value){ if(sock && sock.readyState === 1)
@@ -362,12 +365,14 @@ function connect(){
     if(m.type === "welcome"){
       const st = m.state || {};
       takeChat(st.chat); takeNames(st.names); takeSalt(st.salt); takeHist(st.hist); takePool(st.pool);
+      takeBoard(st.board);
     } else if(m.type === "set"){
       if(m.key === "chat") takeChat(m.value);
       else if(m.key === "names") takeNames(m.value);
       else if(m.key === "salt") takeSalt(m.value);
       else if(m.key === "hist") takeHist(m.value);
       else if(m.key === "pool") takePool(m.value);
+      else if(m.key === "board") takeBoard(m.value);
     } else if(m.type === "peers" && typeof m.count === "number"){ heads = m.count;
       $("#watching").textContent = heads > 1 ? heads + " watching" : ""; }
   };
@@ -429,6 +434,42 @@ function paintTally(){
     ? "last results " + today.slice(-14).map(h =>
         `<span title="race #${h.rid % 100000}: ${horseName(h.w)}">${EMO[h.w]}</span>`).join("")
     : "no races yet today";
+}
+/* ---------- the day's board: what the room actually won ----------
+   Every screen keeps the best result it has seen for each name today, and the merge takes the larger
+   number, so the board survives people closing the tab. It resets by itself at midnight UTC. */
+const dayKey = () => new Date().toISOString().slice(0,10);
+function takeBoard(v){
+  if(!v || typeof v !== "object" || String(v.d || "") !== dayKey() || typeof v.u !== "object") return;
+  if(board.d !== dayKey()) board = { d: dayKey(), u: {} };
+  for(const k of Object.keys(v.u).slice(0, 200)){
+    const nm = String(k).replace(/[<>\n\r]/g,"").trim().slice(0,14);
+    const n = Math.floor(Number(v.u[k]));
+    /* "probe" was my own test entry while I checked the merge. A test must not sit on a public board. */
+    if(!nm || nm.toLowerCase() === "probe" || !isFinite(n) || n <= 0 || n > 1e9) continue;
+    board.u[nm] = Math.max(board.u[nm] || 0, n);
+  }
+  paintBoard();
+}
+/* my own profit for the day, so the board is not the only number that moves */
+function dayProfit(delta){
+  if(S.day !== dayKey()){ S.day = dayKey(); S.prof = 0; }
+  S.prof = (S.prof || 0) + delta;
+  save(); paintBoard(); return S.prof;
+}
+function addBoard(profit){
+  if(!(profit > 0)) return;
+  if(board.d !== dayKey()) board = { d: dayKey(), u: {} };
+  board.u[S.name] = Math.max(board.u[S.name] || 0, Math.floor(profit));
+  send("board", board); paintBoard();
+}
+function paintBoard(){
+  const rows = Object.entries(board.d === dayKey() ? board.u : {}).sort((a,b) => b[1] - a[1]).slice(0,5);
+  const mine = S.day === dayKey() ? (S.prof || 0) : 0;
+  $("#myprof").textContent = mine === 0 ? "" : (mine > 0 ? "you +" + fmt(mine) : "you " + fmt(mine));
+  $("#board").innerHTML = rows.length
+    ? rows.map(([nm,v],i) => `<div class="tr"><span>${i+1}. ${nm}${nm === S.name ? " <em>you</em>" : ""}</span><b>${fmt(v)}</b></div>`).join("")
+    : `<div class="sub">Nobody has won today yet. Win a bet and your name goes here.</div>`;
 }
 function takeNames(v){
   if(!v || typeof v !== "object") return;
@@ -655,9 +696,13 @@ function settle(r){
     if(S.bet.h === r.winner){
       const win = Math.round(S.bet.amt * oddsFor(r.rid)[S.bet.h]);
       S.pts += win; S.won++;
+      addBoard(dayProfit(win - S.bet.amt));
       toast("You win " + fmt(win) + " points.");
       bcast(`wins ${fmt(win)} points on ${horseName(r.winner)}.`);
-    } else { S.lost++; toast(horseName(r.winner) + " wins. Your bet is gone."); }
+    } else {
+      S.lost++; dayProfit(-S.bet.amt);
+      toast(horseName(r.winner) + " wins. Your bet is gone.");
+    }
     S.bet = null; save();
   }
   paint();
@@ -751,6 +796,7 @@ sysline("Six horses run one winding course. The first three are the agents of th
 sysline("Bets close when the gate opens. The result is not decided until then.");
 paint();
 paintTally();
+paintBoard();
 requestAnimationFrame(frame);
 </script>
 </body>

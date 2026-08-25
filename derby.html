@@ -1112,6 +1112,26 @@ paint();
 paintTally();
 paintBoard();
 requestAnimationFrame(frame);
+/* ---------- the room keeps working when the tab is behind another one ----------
+   Drawing runs on requestAnimationFrame, and a browser stops that for a tab you cannot see. I found
+   this the hard way: my own screen was the only one open, it sat behind another tab, and two stakes
+   races went by with no salt agreed and no result recorded. A timer still runs in the background, so
+   the parts that are not drawing live here instead: agree the salt at the gate, and record the result
+   at the finish. Both are safe to call twice. */
+function bgTick(){
+  if(STATS || replay || !live) return;
+  const p = phaseOf();
+  maybeSendSalt(p.rid, p.phase);
+  if(p.phase === "bet") return;
+  const salt = saltFor(p.rid);
+  if(!salt) return;
+  const mstr = modStr();
+  if(!race || race.rid !== p.rid || race.salt !== salt || race.mods !== mstr)
+    race = buildRace(p.rid, salt, mstr);
+  if(p.phase === "done") settle(race);
+}
+setInterval(bgTick, 1000);
+
 /* Last, because it replaces the whole page: the game must finish starting first,
    so the room socket is live and the state it sends lands in the same variables. */
 if(STATS){

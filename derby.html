@@ -147,7 +147,9 @@ footer a{color:var(--gold)}
       </div>
       <div class="row">
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
-        <button class="btn ghost" id="patch">Carrot patch · 150 points</button>
+        <button class="btn ghost" id="patch">Carrot patch · 150</button>
+        <button class="btn ghost" id="mud">Heavy going · 120</button>
+        <button class="btn ghost" id="legup">Leg-up for the outsider · 250</button>
         <button class="btn ghost" id="share">Share this race</button>
         <button class="btn ghost" id="verify">Verify this race</button>
         <button class="btn ghost" id="back" hidden>Back to live</button>
@@ -312,6 +314,11 @@ function buildRace(rid, salt, mstr){
   /* A carrot patch is bought by the room before the gate. It is an input to the race, like the salt,
      so the race stays a pure function and the receipt still proves it. */
   const goals = [c.goal].concat(m.includes("c2") ? [secondGoal(c)] : []);
+  /* Two more redeems, both plain numbers in this function. Mud slows the whole field. A leg-up gives
+     the longest published price a little more speed. The published odds come from the "form" race,
+     which is built with no redeems, so buying one never moves the price you were shown. */
+  const mud = m.includes("mu") ? 0.9 : 1;
+  const legUp = m.includes("lu") ? oddsFor(rid).reduce((b, o, i, all) => o > all[b] ? i : b, 0) : -1;
   const nearest = (x, y) => {
     let best = goals[0], bd = 1e9;
     for(const g of goals){ const dx = x - (g.x+0.5), dy = y - (g.y+0.5), d = dx*dx + dy*dy;
@@ -323,7 +330,9 @@ function buildRace(rid, salt, mstr){
   const hs = [];
   for(let i = 0; i < HORSES; i++){
     const a = (i - 2.5) * 0.34 + (rnd() - 0.5) * 0.5;         /* they leave the pen facing the course */
-    const sp = 0.095 + rnd() * 0.04;                         /* cells per tick, constant */
+    let sp = 0.095 + rnd() * 0.04;                           /* cells per tick, constant */
+    sp *= mud * (i === legUp ? 1.5 : 1);                      /* the redeems, after the draw, so the
+                                                                random sequence never changes */
     hs.push({ i, x: 2.5, y: c.goal.y + 0.5 + (i - 2.5) * 0.28,
       vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, sp,
       path: new Float32Array(steps * 2), done: -1, hits: 0, recent: 0 });
@@ -551,7 +560,9 @@ function takeSHist(v){
 }
 /* Only the race that is still taking bets can be changed, and only by the three known redeems, so a
    late message cannot alter a race that is already running. */
-const MODS = { c2: "a second carrot patch" };
+const MODS = { c2: "a second carrot patch", mu: "heavy going, the whole field 10% slower",
+               lu: "a leg-up for the longest price" };
+const MODCOST = { c2: 150, mu: 120, lu: 250 };
 function modStr(){ return mods.rid === ridNow() ? mods.list.slice().sort().join("+") : ""; }
 function takeMods(v){
   if(!v || typeof v !== "object") return;
@@ -567,8 +578,10 @@ function buyMod(k){
   if(phaseOf().phase !== "bet") return toast("Only before the gate. The next window opens in a moment.");
   if(mods.rid !== rid) mods = { rid, list: [] };
   if(mods.list.includes(k)) return toast("The room already bought that for this race.");
-  if(S.pts < 150) return toast("A carrot patch costs 150 points. You have " + fmt(S.pts) + ".");
-  S.pts -= 150; save();
+  const cost = MODCOST[k];
+  if(!cost) return;
+  if(S.pts < cost) return toast(`That costs ${cost} points. You have ${fmt(S.pts)}.`);
+  S.pts -= cost; save();
   mods.list.push(k); send("mods", mods); paintMods(); paint();
   bcast(`buys ${MODS[k]} for this race.`);
   sysline(`${S.name} bought ${MODS[k]}. Every screen runs the new race.`);
@@ -1030,6 +1043,8 @@ function statsHtml(){
   </div>`;
 }
 $("#patch").onclick = () => buyMod("c2");
+$("#mud").onclick   = () => buyMod("mu");
+$("#legup").onclick = () => buyMod("lu");
 paintMods();
 $("#back").onclick = endReplay;
 {

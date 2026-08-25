@@ -156,6 +156,7 @@ footer a{color:var(--gold)}
         <button class="btn ghost" id="cash">Cash out to Penny Loop</button>
         <button class="btn ghost" id="snd"></button>
       </div>
+      <div class="sub" id="nextstk"></div>
       <div class="sub" id="mods"></div>
       <div class="sub" id="receipt"></div>
       <div class="tally">
@@ -846,6 +847,13 @@ function frame(){
   }
   document.body.classList.toggle("stakes", isStakes(p.rid));
   $("#clock").textContent = new Date().toISOString().slice(11,19) + " UTC";
+  /* Stakes races land on the quarter hour, because the race number comes from the clock. Saying when
+     the next one is gives somebody a reason to come back at a named time. */
+  {
+    const nxt = (Math.floor(p.rid / 10) + (isStakes(p.rid) ? 0 : 1)) * 10;
+    $("#nextstk").textContent = isStakes(p.rid) ? "" :
+      "next stakes race at " + new Date(nxt * RACE_MS).toISOString().slice(11,16) + " UTC, all payouts doubled";
+  }
   const sec = Math.floor(Date.now()/1000);
   if(sec !== lastSec){
     const st = sock ? sock.readyState : 3;

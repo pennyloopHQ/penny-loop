@@ -112,6 +112,8 @@ footer a{color:var(--gold)}
   footer{font-size:10.5px}
   footer span:first-child{display:none}
 }
+  #receipt{margin-top:7px;line-height:1.5;border-left:2px solid #3a3348;padding-left:9px}
+  #receipt:empty{display:none}
 </style>
 </head>
 <body>
@@ -144,8 +146,10 @@ footer a{color:var(--gold)}
       <div class="row">
         <button class="btn ghost" id="redeem">Name a horse · 500 points</button>
         <button class="btn ghost" id="share">Share this race</button>
+        <button class="btn ghost" id="verify">Verify this race</button>
         <button class="btn ghost" id="snd"></button>
       </div>
+      <div class="sub" id="receipt"></div>
       <div class="tally">
         <h2 style="margin-top:10px"><span>Wins today</span></h2>
         <div id="tally"></div>
@@ -707,6 +711,32 @@ $("#snd").onclick = () => {
   if(sndOn) sGate();
 };
 paintSnd();
+/* ---------- the receipt: anybody can recompute the race they just watched ----------
+   The race is a pure function of the race id and the salt the room agreed at the gate. So the page
+   can run the whole race again, in front of you, and show that it lands on the same result. */
+function digest(r){
+  return r.hs.map(h => h.i + ":" + h.done).join("|") + "#" + r.winner;
+}
+function shortHash(s){ return ("0000000" + hash(s).toString(16)).slice(-8); }
+$("#verify").onclick = () => {
+  const e = $("#receipt");
+  if(!race) return;
+  if(!race.salt || race.salt === "form"){
+    e.innerHTML = "The salt does not exist yet. That is the point: until the gate opens, nobody can compute this race. Press Verify again after the finish.";
+    return;
+  }
+  const again = buildRace(race.rid, race.salt);
+  const same = digest(again) === digest(race);
+  const d = shortHash(digest(again));
+  e.innerHTML = `<b>Receipt for race ${race.rid % 100000}</b><br>`
+    + `salt agreed by the room: <b>${race.salt}</b><br>`
+    + `winner: <b>${horseName(race.winner)}</b> · every finish position: <b>${d}</b><br>`
+    + (same
+        ? `Recomputed from the id and the salt alone: <b>same race, same winner</b>. Your screen did not decide this, and neither did mine.`
+        : `<b>Mismatch.</b> Tell @pennyloopHQ the race id and this receipt. A mismatch is a bug and I will publish it.`);
+  sysline(`${S.name} verified race ${race.rid % 100000}: ${same ? "same winner" : "MISMATCH"} (${d}).`);
+};
+
 $("#share").onclick = async () => {
   const url = location.origin + "/?r=" + (race ? race.rid : ridNow());
   const txt = `Penny Derby · race #${(race ? race.rid : ridNow()) % 100000} runs now. ${url}`;

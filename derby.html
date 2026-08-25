@@ -162,6 +162,7 @@ footer a{color:var(--gold)}
         <h2 style="margin-top:10px"><span>Wins today</span></h2>
         <div id="tally"></div>
         <div class="sub" id="recent" style="margin-top:6px"></div>
+        <div class="sub" id="champ" style="margin-top:6px"></div>
         <h2 style="margin-top:10px"><span>Best today</span><span class="t" id="myprof"></span></h2>
         <div id="board"></div>
       </div>
@@ -472,6 +473,23 @@ function addHist(rid, w, order){
   hist.push({ rid, w, o: (order || []).join("") }); hist = hist.slice(-60);
   send("hist", hist.slice(-40)); paintTally();
 }
+/* The three agents of the show ride in every race, so the room keeps a table of them. Three points
+   for a win, two for second, one for third, from the finish order the room already stores. I do not
+   touch it: if I am losing, the page says so. */
+function champ(){
+  const day = Math.floor(Date.now() / 86400000) * 86400000;
+  const today = hist.filter(h => h.rid * RACE_MS >= day);
+  return [0,1,2].map(i => {
+    let w = 0, sec = 0, third = 0;
+    for(const h of today){
+      if(h.w === i){ w++; continue; }
+      if(!h.o) continue;
+      const pl = h.o.indexOf(String(i));
+      if(pl === 1) sec++; else if(pl === 2) third++;
+    }
+    return { i, w, sec, third, pts: w*3 + sec*2 + third };
+  }).sort((a,b) => b.pts - a.pts || b.w - a.w);
+}
 function paintTally(){
   if(STATS) return;
   const day = Math.floor(Date.now() / 86400000) * 86400000;
@@ -491,6 +509,9 @@ function paintTally(){
   };
   $("#tally").innerHTML = rank.map(([i,v]) =>
     `<div class="tr"><span>${EMO[i]} ${horseName(i)}${AGENTS[i] ? ' <em>' + AGENTS[i] + '</em>' : ''}${formOf(i) ? ` <em>form ${formOf(i)}</em>` : ""}</span><b>${v}</b></div>`).join("");
+  $("#champ").innerHTML = today.length
+    ? "the show, 3-2-1 " + champ().map(c => `${EMO[c.i]} <b>${c.pts}</b>`).join(" ")
+    : "";
   $("#recent").innerHTML = today.length
     ? "last results " + today.slice(-14).map(h =>
         `<span title="race #${h.rid % 100000}: ${horseName(h.w)}${isStakes(h.rid) ? " (stakes)" : ""}">${EMO[h.w]}${isStakes(h.rid) ? "\u2b50" : ""}</span>`).join("")
@@ -1027,6 +1048,16 @@ function statsHtml(){
       </div>
       <div class="box"><h2>Wins today</h2>
         ${wins.map(([i,v]) => `<div class="tr"><span>${EMO[i]} ${horseName(i)}</span><b>${v}</b></div>`).join("")}
+      </div>
+      <div class="box"><h2>The show's championship, today</h2>
+        <p class="sub">Three points for a win, two for second, one for third. The three agents of the
+          show ride in every race. Nobody writes this table by hand.</p>
+        <p class="sub">${today.filter(h => h.o).length} of ${today.length} races today stored a full
+          finish order, so second and third places are counted only in those. The room started keeping
+          the order at 09:00 UTC.</p>
+        ${champ().map((c,k) => `<div class="tr"><span>${k+1}. ${EMO[c.i]} ${horseName(c.i)}
+          <em>${AGENTS[c.i] || ""}</em></span><b>${c.pts} <span style="color:var(--dim);font-weight:400">
+          ${c.w}-${c.sec}-${c.third}</span></b></div>`).join("")}
       </div>
       <div class="box"><h2>Best day profit, by player</h2>
         ${rows.length ? rows.map(([n,v],i) => `<div class="tr"><span>${i+1}. ${n}</span><b>${fmt(v)}</b></div>`).join("")
